@@ -1,0 +1,174 @@
+@using EconomicGame
+@using EconomicGame.Models
+@inject EconomicGame.Services.SaveGameService SaveService
+@inject EconomicGame.Services.GameEngine GameEngine
+
+<div class="save-load">
+    <h2>💾 Сохранение / Загрузка</h2>
+
+    @if (Player == null)
+    {
+        <div class="alert alert-warning">
+            Создайте персонажа для сохранения игры.
+        </div>
+    }
+    else
+    {
+        <!-- Save section -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5>💾 Сохранить игру</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Название сохранения</label>
+                            <input type="text" @bind="_saveName" class="form-control" 
+                                   placeholder="Моё сохранение..." maxlength="50" />
+                        </div>
+                        <button class="btn btn-primary" @onclick="SaveGame">
+                            💾 Сохранить
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6>Текущий прогресс:</h6>
+                                <p><strong>Игрок:</strong> @Player.Name</p>
+                                <p><strong>Деньги:</strong> @Player.Money.ToString("C")</p>
+                                <p><strong>День:</strong> @(((GameEngine.CurrentTime - DateTime.Today).Days) + 1)</p>
+                                <p><strong>Время:</strong> @GameEngine.CurrentTime.ToString("t")</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Message -->
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert @_messageClass mb-4">@_message</div>
+        }
+
+        <!-- Load section -->
+        <div class="card">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">📂 Загрузить игру</h5>
+                <button class="btn btn-sm btn-outline-light" @onclick="RefreshSaves">
+                    🔄 Обновить
+                </button>
+            </div>
+            <div class="card-body">
+                @if (!_saves.Any())
+                {
+                    <div class="alert alert-info">
+                        Нет сохранённых игр. Создай своё первое сохранение!
+                    </div>
+                }
+                else
+                {
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Игрок</th>
+                                <th>День</th>
+                                <th>Деньги</th>
+                                <th>Сохранено</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var save in _saves)
+                            {
+                                <tr>
+                                    <td><strong>@save.Data.SaveName</strong></td>
+                                    <td>@save.Data.PlayerData?.Name</td>
+                                    <td>День @save.Data.GameDay</td>
+                                    <td>@(save.Data.PlayerData?.Money.ToString("C") ?? "-")</td>
+                                    <td class="text-muted small">@save.Data.SavedAt.ToString("g")</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-success me-1" 
+                                                @onclick="() => LoadGame(save.FileName)">
+                                            📂 Загрузить
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" 
+                                                @onclick="() => DeleteSave(save.FileName)">
+                                            🗑️
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+
+        <div class="card mt-4 bg-light">
+            <div class="card-body">
+                <h6>ℹ️ Информация</h6>
+                <ul class="mb-0 small">
+                    <li>Сохранения хранятся в: <code>%APPDATA%\Trader\Saves\</code></li>
+                    <li>Загрузка заменит текущий прогресс</li>
+                    <li>Рекомендуется сохраняться регулярно!</li>
+                </ul>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Player? Player { get; set; }
+
+    private string _saveName = "";
+    private string _message = "";
+    private string _messageClass = "alert-info";
+    private List<(string FileName, GameSaveData Data)> _saves = new();
+
+    protected override void OnInitialized()
+    {
+        RefreshSaves();
+        _saveName = $"Сохранение {DateTime.Now:dd.MM.yyyy}";
+    }
+
+    private void RefreshSaves()
+    {
+        _saves = SaveService.GetSaveFiles();
+        StateHasChanged();
+    }
+
+    private void SaveGame()
+    {
+        if (string.IsNullOrWhiteSpace(_saveName))
+        {
+            _message = "❌ Введи название сохранения!";
+            _messageClass = "alert-danger";
+            return;
+        }
+
+        var result = SaveService.SaveGame(_saveName);
+        _message = result;
+        _messageClass = result.StartsWith("✅") ? "alert-success" : "alert-danger";
+        RefreshSaves();
+    }
+
+    private void LoadGame(string fileName)
+    {
+        var result = SaveService.LoadGame(fileName);
+        _message = result;
+        _messageClass = result.StartsWith("✅") ? "alert-success" : "alert-danger";
+        StateHasChanged();
+    }
+
+    private void DeleteSave(string fileName)
+    {
+        var result = SaveService.DeleteSave(fileName);
+        _message = result;
+        _messageClass = result.StartsWith("✅") ? "alert-success" : "alert-danger";
+        RefreshSaves();
+    }
+}

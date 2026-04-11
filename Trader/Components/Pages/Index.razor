@@ -1,0 +1,183 @@
+@page "/"
+@using Microsoft.AspNetCore.SignalR.Client
+@using Trader.Components.Layout
+@inject EconomicGame.Services.GameEngine GameEngine
+@inject EconomicGame.Services.PlayerService PlayerService
+@inject EconomicGame.Services.StockMarketService StockMarketService
+@inject EconomicGame.Services.CorporateRivalryService RivalryService
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-2 sidebar">
+            <h3>Trader</h3>
+            <NavMenu OnViewChange="@HandleViewChange" />
+        </div>
+        <div class="col-10 main-content">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h1>Welcome to Trader!</h1>
+                <h3>@GameEngine.CurrentTime.ToString("t") (Day @((GameEngine.CurrentTime - DateTime.Today).Days + 1))</h3>
+            </div>
+            
+            @if (_player == null)
+            {
+                <div class="card p-4">
+                    <h3>Enter Your Name</h3>
+                    <input @bind="_playerName" placeholder="Player name" class="form-control mb-2" />
+                    <button @onclick="CreatePlayer" class="btn btn-primary">Start Playing</button>
+                </div>
+            }
+            else
+            {
+                <div class="player-info mb-3">
+                    <h4>Player: @_player.Name</h4>
+                    <p>Money: @_player.Money.ToString("C")</p>
+                    @if (_player.Factories.Any())
+                    {
+                        <p><strong>Industrial Power:</strong> @(_player.Factories.Count) Factories (@string.Join(" ", _player.Factories.ToList().Select(f => f.Emoji)))</p>
+                    }
+                    
+                    @if (_player.CorporateThreatLevel > 0.1m)
+                    {
+                        var escalation = RivalryService.CurrentEscalationLevel;
+                        var escalationClass = escalation switch { 3 => "alert-danger", 2 => "alert-warning", 1 => "alert-info", _ => "alert-secondary" };
+                        var escalationLabel = escalation switch { 3 => "🔴 ВРАЖДЕБНЫЙ", 2 => "🟠 АГРЕССИВНЫЙ", 1 => "🟡 КОНКУРЕНТНЫЙ", _ => "🟢 НЕЙТРАЛЬНЫЙ" };
+                        <div class="alert @escalationClass p-2 mb-2">
+                            <strong>AI Escalation: @escalationLabel (Lv.@escalation)</strong>
+                            <span class="ms-2">Threat: @((_player.CorporateThreatLevel * 100).ToString("F0"))%</span>
+                            @if (_player.RivalPlayerIds.Any())
+                            {
+                                var rivals = _player.RivalPlayerIds.ToList();
+                                <div class="small">Rivals: @string.Join(", ", rivals.Select(id => PlayerService.GetAllPlayers().FirstOrDefault(p => p.Id == id)?.Name ?? "Unknown"))</div>
+                            }
+                            @if (RivalryService.CoalitionMembers.Any())
+                            {
+                                <div class="small text-danger">⚠️ AI Coalition: @RivalryService.CoalitionMembers.Count bots coordinating</div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="news-ticker mb-3">
+                    @if (GameEngine.LatestNews != null)
+                    {
+                        <p><strong>@GameEngine.LatestNews.Title</strong>: @GameEngine.LatestNews.Content (@GameEngine.LatestNews.Timestamp.ToShortTimeString())</p>
+                    }
+                    else
+                    {
+                        <p>No news yet...</p>
+                    }
+                </div>
+
+                <div class="game-area">
+                    @if (CurrentView == "Market")
+                    {
+                        <MarketView Player="@_player" />
+                    }
+                    else if (CurrentView == "StockExchange")
+                    {
+                        <StockExchangeView Items="@GameEngine.ExchangeItems" Player="@_player" />
+                    }
+                    else if (CurrentView == "Bank")
+                    {
+                        <BankView Player="@_player" />
+                    }
+                    else if (CurrentView == "TradeListings")
+                    {
+                        <TradeListingsView Player="@_player" />
+                    }
+                    else if (CurrentView == "Housing")
+                    {
+                        <HousingView Player="@_player" />
+                    }
+                    else if (CurrentView == "Logistics")
+                    {
+                        <LogisticsView Player="@_player" />
+                    }
+                    else if (CurrentView == "Production")
+                    {
+                        <ProductionView Player="@_player" />
+                    }
+                    else if (CurrentView == "StockMarket")
+                    {
+                        <StockMarketView Player="@_player" />
+                    }
+                    else if (CurrentView == "Bar")
+                    {
+                        <BarView Player="@_player" />
+                    }
+                    else if (CurrentView == "Inventory")
+                    {
+                        <InventoryView Player="@_player" />
+                    }
+                    else if (CurrentView == "Events")
+                    {
+                        <EventsView Player="@_player" />
+                    }
+                    else if (CurrentView == "Save")
+                    {
+                        <SaveView Player="@_player" />
+                    }
+                    else if (CurrentView == "AIPlayers")
+                    {
+                        <AIPlayersView />
+                    }
+                    else
+                    {
+                        <p>Select a section from the left menu.</p>
+                    }
+                </div>
+
+                <div class="activity-log mt-4 p-3 bg-light border rounded">
+                   <h5>Market Activity</h5>
+                   <ul class="list-unstyled" style="max-height: 200px; overflow-y: auto;">
+                       @foreach (var log in GameEngine.MarketActivityLog)
+                       {
+                           <li class="small border-bottom py-1">@log</li>
+                       }
+                   </ul>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string CurrentView { get; set; } = "";
+    private EconomicGame.Player? _player;
+    private string _playerName = "";
+
+    protected override void OnInitialized()
+    {
+        _player = PlayerService.GetCurrentPlayer();
+        GameEngine.OnStateChanged += HandleStateChanged;
+    }
+
+    private void HandleStateChanged()
+    {
+        // Re-fetch player to get updates (especially after load)
+        _player = PlayerService.GetCurrentPlayer();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void CreatePlayer()
+    {
+        if (!string.IsNullOrWhiteSpace(_playerName))
+        {
+            _player = PlayerService.GetOrCreatePlayer(_playerName);
+            StateHasChanged();
+        }
+    }
+
+    private void HandleViewChange(string view)
+    {
+        CurrentView = view;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        GameEngine.OnStateChanged -= HandleStateChanged;
+    }
+}

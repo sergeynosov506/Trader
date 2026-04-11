@@ -1,0 +1,325 @@
+﻿@using EconomicGame
+@inject EconomicGame.Services.GameEngine GameEngine
+@inject EconomicGame.Services.InsuranceService InsuranceService
+
+<div class="bank">
+    <h2>🏦 Банк</h2>
+    
+    @if (Player == null)
+    {
+        <p>Создайте персонажа для доступа к банку.</p>
+    }
+    else if (Player.Vehicle == null)
+    {
+        <div class="alert alert-danger">
+            <strong>Нет доступа!</strong> Нужен транспорт для поездки в банк.<br/>
+            Купите его в Логистике.
+        </div>
+    }
+    else if (GameEngine.CurrentTime.Hour < 9 || GameEngine.CurrentTime.Hour >= 17)
+    {
+        <div class="alert alert-warning">
+            <strong>Закрыто!</strong> Банк работает с 09:00 до 17:00.<br/>
+            Текущее время: @GameEngine.CurrentTime.ToShortTimeString()
+        </div>
+    }
+    else
+    {
+        <!-- Balance Summary -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h5>💵 Наличные</h5>
+                        <h3 class="text-success">@Player.Money.ToString("C")</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
+                        <h5>💰 На депозите</h5>
+                        <h3>@Player.BankDeposit.ToString("C")</h3>
+                        <small>@((GameEngine.Bank.GetDepositInterestRate() * 100).ToString("F1"))% годовых</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card @(Player.Loans.Any() ? "bg-danger" : "bg-success") text-white">
+                    <div class="card-body text-center">
+                        <h5>📋 Долги</h5>
+                        <h3>@Player.Loans.Sum(l => l.Amount + l.Penalty).ToString("C")</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert alert-info alert-dismissible fade show">
+                @_message
+                <button type="button" class="btn-close" @onclick="() => _message = string.Empty"></button>
+            </div>
+        }
+
+        <div class="row">
+            <!-- Deposits Section -->
+            <div class="col-md-4">
+                <div class="card mb-3">
+                    <div class="card-header bg-info text-white">
+                        <h4>💰 Депозит</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Сумма</label>
+                            <input type="number" @bind="_depositAmount" class="form-control" min="100" step="100" />
+                        </div>
+                        <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => _depositAmount = 1000">$1K</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => _depositAmount = 5000">$5K</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => _depositAmount = 10000">$10K</button>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-info flex-grow-1" @onclick="MakeDeposit">📥 Внести</button>
+                            <button class="btn btn-outline-warning flex-grow-1" @onclick="Withdraw">📤 Снять</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loans Section -->
+            <div class="col-md-4">
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white">
+                        <h4>💳 Кредит</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Сумма</label>
+                            <input type="number" @bind="_loanAmount" class="form-control" min="100" max="50000" step="100" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Срок (мес.)</label>
+                            <input type="number" @bind="_loanMonths" class="form-control" min="1" max="60" />
+                        </div>
+                        <button class="btn btn-primary w-100" @onclick="TakeLoan">Взять кредит</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Insurance Section -->
+            <div class="col-md-4">
+                <div class="card mb-3 shadow-sm border-success">
+                    <div class="card-header bg-success text-white">
+                        <h4>🛡️ Страхование</h4>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-2">Защита от природных катастроф. Покрывает 80% убытков при потере товара.</p>
+                        <div class="alert @(Player.HasInsurance ? "alert-success" : "alert-secondary") py-2 small mb-3 text-center">
+                            @if (Player.HasInsurance)
+                            {
+                                <strong>✅ ЗАСТРАХОВАН</strong><br/>
+                                <span>До: @Player.InsuranceExpiry?.ToString("dd.MM HH:mm")</span>
+                            }
+                            else
+                            {
+                                <strong>⚠️ НЕТ ЗАЩИТЫ</strong><br/>
+                                <span>Риск потери капитала!</span>
+                            }
+                        </div>
+                        <button class="btn btn-success w-100" @onclick="BuyInsurance" disabled="@Player.HasInsurance">
+                            Купить полис ($25,000)
+                        </button>
+                        @if (Player.HasInsurance)
+                        {
+                            <p class="text-center mt-2 small text-success">🛡️ Активно на 30 дней</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Loans -->
+        @if (Player.Loans.Any())
+        {
+            <div class="card mb-3">
+                <div class="card-header bg-warning text-dark">
+                    <h5>📋 Активные кредиты</h5>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Сумма</th>
+                                <th>Срок</th>
+                                <th>Штраф</th>
+                                <th>Статус</th>
+                                <th>Действие</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var loan in Player.Loans)
+                            {
+                                var daysLeft = (loan.DueDate - GameEngine.CurrentTime).Days;
+                                <tr class="@(loan.IsDefaulted ? "table-danger" : daysLeft < 7 ? "table-warning" : "")">
+                                    <td>@loan.Amount.ToString("C")</td>
+                                    <td>@(daysLeft > 0 ? $"{daysLeft} дн." : "Просрочен")</td>
+                                    <td>@loan.Penalty.ToString("C")</td>
+                                    <td>
+                                        @if (loan.IsDefaulted)
+                                        {
+                                            <span class="badge bg-danger">Просрочен</span>
+                                        }
+                                        else if (daysLeft < 7)
+                                        {
+                                            <span class="badge bg-warning text-dark">Скоро!</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success">Активен</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-success" @onclick="() => RepayLoan(loan)">
+                                            Погасить (@((loan.Amount + loan.Penalty).ToString("C")))
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- Monthly Report -->
+        <div class="card">
+            <div class="card-header bg-secondary text-white">
+                <h5>📊 Финансовый отчёт</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="h6 text-muted">Доходы (месяц)</div>
+                        <div class="h4 text-success">+@Player.MonthlyIncome.ToString("C")</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="h6 text-muted">Расходы (месяц)</div>
+                        <div class="h4 text-danger">-@Player.MonthlyExpenses.ToString("C")</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="h6 text-muted">Баланс</div>
+                        <div class="h4 @(Player.MonthlyIncome - Player.MonthlyExpenses >= 0 ? "text-success" : "text-danger")">
+                            @((Player.MonthlyIncome - Player.MonthlyExpenses).ToString("C"))
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="h6 text-muted">Чистая стоимость</div>
+                        <div class="h4 text-primary">@((Player.Money + Player.BankDeposit - Player.Loans.Sum(l => l.Amount + l.Penalty)).ToString("C"))</div>
+                    </div>
+                </div>
+                
+                @if (Player.MonthlyReports.Any())
+                {
+                    <hr />
+                    <h6>История отчётов</h6>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>День</th>
+                                <th>Начало</th>
+                                <th>Конец</th>
+                                <th>Изменение</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var report in Player.MonthlyReports.TakeLast(5).Reverse())
+                            {
+                                <tr>
+                                    <td>День @report.Day</td>
+                                    <td>@report.StartingBalance.ToString("C")</td>
+                                    <td>@report.EndingBalance.ToString("C")</td>
+                                    <td class="@(report.NetChange >= 0 ? "text-success" : "text-danger")">
+                                        @(report.NetChange >= 0 ? "+" : "")@report.NetChange.ToString("C")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public EconomicGame.Player? Player { get; set; }
+
+    private decimal _loanAmount = 1000m;
+    private int _loanMonths = 12;
+    private decimal _depositAmount = 1000m;
+    private string _message = "";
+
+    private void TakeLoan()
+    {
+        if (Player == null) return;
+
+        if (_loanAmount < 100)
+        {
+            _message = "Минимальная сумма кредита: $100";
+            return;
+        }
+
+        if (_loanMonths < 1)
+        {
+            _message = "Срок кредита минимум 1 месяц";
+            return;
+        }
+
+        var bank = GameEngine.Bank;
+        bank.TakeLoan(Player, _loanAmount, _loanMonths, GameEngine.CurrentTime);
+        Player.MonthlyIncome += _loanAmount;
+        _message = $"✅ Кредит {_loanAmount:C} на {_loanMonths} мес. под {bank.CurrentInterestRate:P1}";
+        StateHasChanged();
+    }
+
+    private void RepayLoan(EconomicGame.Loan loan)
+    {
+        if (Player == null) return;
+
+        var totalDebt = loan.Amount + loan.Penalty;
+        if (Player.Money < totalDebt)
+        {
+            _message = $"❌ Недостаточно денег! Нужно {totalDebt:C}, есть {Player.Money:C}";
+            return;
+        }
+
+        Player.Money -= totalDebt;
+        Player.MonthlyExpenses += totalDebt;
+        Player.Loans.Remove(loan);
+        _message = $"✅ Погашен кредит {loan.Amount:C} + штраф {loan.Penalty:C}";
+        StateHasChanged();
+    }
+
+    private void MakeDeposit()
+    {
+        if (Player == null) return;
+        _message = GameEngine.Bank.MakeDeposit(Player, _depositAmount);
+        StateHasChanged();
+    }
+
+    private void Withdraw()
+    {
+        if (Player == null) return;
+        _message = GameEngine.Bank.Withdraw(Player, _depositAmount);
+        StateHasChanged();
+    }
+
+    private void BuyInsurance()
+    {
+        if (Player == null) return;
+        _message = InsuranceService.BuyInsurance(GameEngine.CurrentTime);
+        StateHasChanged();
+    }
+}

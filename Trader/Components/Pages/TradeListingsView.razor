@@ -1,0 +1,139 @@
+@using EconomicGame.Services
+@using EconomicGame
+@inject GameEngine GameEngine
+
+<div class="trade-listings mt-4 border p-3">
+    <h3>Player Market</h3>
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "browse" ? "active" : "")" @onclick='() => _activeTab = "browse"' style="cursor:pointer">Browse Listings</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "create" ? "active" : "")" @onclick='() => _activeTab = "create"' style="cursor:pointer">Sell Item</a>
+        </li>
+    </ul>
+
+    @if (_activeTab == "browse")
+    {
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Seller</th>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Price/Unit</th>
+                    <th>Total</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var listing in GameEngine.TradeListings)
+                {
+                    <tr>
+                        <td>@listing.SellerName</td>
+                        <td>
+                            @listing.ItemName
+                            @if (listing.AutoRepeat)
+                            {
+                                <span class="badge bg-info ms-1" title="Auto-Repeat enabled">🔄</span>
+                            }
+                        </td>
+                        <td>@listing.Quantity</td>
+                        <td>@listing.PricePerUnit.ToString("C")</td>
+                        <td>@listing.TotalPrice.ToString("C")</td>
+                        <td>
+                            @if (listing.SellerId == Player?.Id)
+                            {
+                                <button class="btn btn-sm btn-danger" @onclick="() => CancelListing(listing)">Cancel (5% Fee)</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-primary" @onclick="() => BuyListing(listing)">Buy</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_activeTab == "create")
+    {
+        @if (Player == null)
+        {
+            <div class="alert alert-warning">Please create a player first.</div>
+        }
+        else
+        {
+            <div class="row">
+                <div class="col-md-6">
+                    <label>Select Item to Sell:</label>
+                    <select class="form-select mb-2" @bind="_selectedItemName">
+                        <option value="">-- Select Item --</option>
+                        @foreach (var item in Player.Inventory)
+                        {
+                            <option value="@item.ItemName">@item.ItemName (Qty: @item.Quantity)</option>
+                        }
+                    </select>
+
+                    <label>Quantity:</label>
+                    <input type="number" class="form-control mb-2" @bind="_quantity" min="1" />
+
+                    <label>Price Per Unit:</label>
+                    <input type="number" class="form-control mb-2" @bind="_price" min="1" />
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="autoRepeat" @bind="_autoRepeat" />
+                        <label class="form-check-label" for="autoRepeat">
+                            Auto-repeat listing after sale
+                        </label>
+                    </div>
+
+                    <button class="btn btn-success" @onclick="CreateListing">List Item</button>
+                    <small class="d-block text-muted mt-1">Platform takes 10% commission on sale.</small>
+                </div>
+            </div>
+        }
+    }
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert alert-info mt-2">@_message</div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Player? Player { get; set; }
+
+    private string _activeTab = "browse";
+    private string _selectedItemName = "";
+    private int _quantity = 1;
+    private decimal _price = 0;
+    private bool _autoRepeat = false;
+    private string _message = "";
+
+    private void CreateListing()
+    {
+        if (Player == null) return;
+        _message = GameEngine.CreateListing(Player, _selectedItemName, _quantity, _price, _autoRepeat);
+        // Reset form if success? 
+        if (_message.StartsWith("Listed")) 
+        {
+             _activeTab = "browse";
+        }
+    }
+
+    private void BuyListing(TradeListing listing)
+    {
+        if (Player == null) return;
+        _message = GameEngine.BuyListing(Player, listing);
+    }
+
+    private void CancelListing(TradeListing listing)
+    {
+        if (Player == null) return;
+        _message = GameEngine.CancelListing(Player, listing);
+    }
+}

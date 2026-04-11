@@ -1,0 +1,135 @@
+@using EconomicGame
+@inject EconomicGame.Services.PlayerService PlayerService
+@inject EconomicGame.Services.GameEngine GameEngine
+@implements IDisposable
+
+<div class="ai-players-view p-3 bg-dark text-white rounded shadow-lg border border-info">
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary pb-2">
+        <div>
+            <h2 class="text-info m-0" style="text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);">
+                <i class="bi bi-cpu"></i> Neural Network: Collective Intelligence
+            </h2>
+            <small class="text-muted">Monitoring @_aiPlayers.Count independent digital diverges</small>
+        </div>
+        <div class="text-end">
+            <span class="badge bg-primary border border-info">Nodes: @_aiPlayers.Count</span>
+            <span class="badge bg-success border border-success">Sync Active</span>
+        </div>
+    </div>
+    
+    <div class="table-responsive" style="min-height: 500px;">
+        <table class="table table-dark table-hover align-middle" style="font-family: 'Courier New', Courier, monospace;">
+            <thead class="text-info border-secondary">
+                <tr>
+                    <th>X-NODE ID</th>
+                    <th>CREDITS</th>
+                    <th>CYCLE PROFIT</th>
+                    <th>SUCCESS</th>
+                    <th title="Risk Tolerance">DNA:RSK</th>
+                    <th title="Sentiment">DNA:SNT</th>
+                    <th title="Specialization">DNA:SPC</th>
+                    <th>STATE</th>
+                </tr>
+            </thead>
+            <tbody class="border-secondary">
+                @foreach (var ai in PaginatedPlayers)
+                {
+                    <tr style="@(ai.DailyProfit > 1000 ? "background: rgba(0, 255, 0, 0.05);" : "")">
+                        <td><strong class="text-info">@ai.Name</strong></td>
+                        <td class="text-warning">@ai.Money.ToString("N0")</td>
+                        <td class="@(ai.DailyProfit >= 0 ? "text-success" : "text-danger")">
+                            @(ai.DailyProfit >= 0 ? "+" : "")@ai.DailyProfit.ToString("N0")
+                        </td>
+                        <td>
+                            <div class="progress bg-secondary" style="height: 6px; width: 60px;" title="@(ai.SuccessScore.ToString("P0"))">
+                                <div class="progress-bar bg-info shadow-sm" role="progressbar" style="width: @(ai.SuccessScore * 100)%"></div>
+                            </div>
+                        </td>
+                        <td>@ai.Strategy.RiskTolerance.ToString("F2")</td>
+                        <td class="@(ai.Strategy.Sentiment >= 0 ? "text-success" : "text-danger")">
+                            @ai.Strategy.Sentiment.ToString("F2")
+                        </td>
+                        <td>
+                            <span class="badge @(ai.Strategy.MarketSpecialization > 0.7m ? "bg-warning" : (ai.Strategy.MarketSpecialization < 0.3m ? "bg-primary" : "bg-secondary")) text-dark">
+                                @(ai.Strategy.MarketSpecialization > 0.7m ? "PROD" : (ai.Strategy.MarketSpecialization < 0.3m ? "RAW" : "MIX"))
+                            </span>
+                        </td>
+                        <td>
+                              @if (ai.IsSabotaged)
+                              {
+                                  <span class="badge bg-warning text-dark rounded-0" style="font-size: 0.7rem;">SABOTAGED</span>
+                              }
+                              else if (ai.OwnerId != null)
+                              {
+                                  <span class="badge bg-info text-dark rounded-0" style="font-size: 0.7rem;">SUBSIDARY</span>
+                              }
+                              else if (ai.Strategy.RiskTolerance > 1.2m)
+                              {
+                                  <span class="badge bg-danger rounded-0" style="font-size: 0.7rem;">AGGRESSIVE</span>
+                              }
+                              else if (ai.Strategy.RiskTolerance < 0.8m)
+                              {
+                                  <span class="badge bg-success rounded-0" style="font-size: 0.7rem;">CAUTIOUS</span>
+                              }
+                              else
+                              {
+                                  <span class="badge bg-secondary rounded-0" style="font-size: 0.7rem;">STABLE</span>
+                              }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Interface Pagination -->
+    <div class="d-flex justify-content-between align-items-center mt-3 border-top border-secondary pt-3">
+        <div class="text-muted small">Viewing segment @(CurrentPage + 1) / @TotalPages</div>
+        <div class="btn-group shadow">
+            <button class="btn btn-outline-info btn-sm rounded-0" @onclick="PrevPage" disabled="@(CurrentPage == 0)">
+                <i class="bi bi-chevron-left"></i> PREV
+            </button>
+            <button class="btn btn-outline-info btn-sm rounded-0" @onclick="NextPage" disabled="@(CurrentPage >= TotalPages - 1)">
+                NEXT <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ai-players-view .table { background: transparent; }
+    .ai-players-view .progress { border-radius: 0; }
+    .ai-players-view .badge { letter-spacing: 1px; }
+</style>
+
+@code {
+    private List<Player> _aiPlayers = new();
+    private int CurrentPage { get; set; } = 0;
+    private int PageSize { get; set; } = 15;
+
+    private IEnumerable<Player> PaginatedPlayers => 
+        _aiPlayers.OrderByDescending(p => p.Money).ThenByDescending(p => p.DailyProfit)
+                 .Skip(CurrentPage * PageSize).Take(PageSize);
+
+    private int TotalPages => (int)Math.Ceiling((double)_aiPlayers.Count / PageSize);
+
+    protected override void OnInitialized()
+    {
+        RefreshData();
+        GameEngine.OnStateChanged += RefreshData;
+    }
+
+    private void RefreshData()
+    {
+        _aiPlayers = PlayerService.GetAllPlayers().Where(p => p.IsAI).ToList();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void NextPage() => CurrentPage = Math.Min(CurrentPage + 1, TotalPages - 1);
+    private void PrevPage() => CurrentPage = Math.Max(CurrentPage - 1, 0);
+
+    public void Dispose()
+    {
+        GameEngine.OnStateChanged -= RefreshData;
+    }
+}

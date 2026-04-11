@@ -1,0 +1,48 @@
+using EconomicGame;
+using EconomicGame.Services;
+using EconomicGame.Hubs;
+using Microsoft.AspNetCore.SignalR;
+using Trader.Components;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
+builder.Services.AddSignalR(); // Keep for GameHub
+
+// Game services
+builder.Services.AddSingleton<PlayerService>();
+builder.Services.AddSingleton<StockMarketService>();
+builder.Services.AddSingleton<SyncEngine>();
+builder.Services.AddSingleton<CorporateRivalryService>();
+builder.Services.AddSingleton<CorporateActionService>();
+builder.Services.AddSingleton<InsuranceService>();
+builder.Services.AddSingleton<GameEngine>();
+builder.Services.AddSingleton<AIService>();
+builder.Services.AddSingleton<SaveGameService>();
+builder.Services.AddHostedService<GameTickService>();
+
+var app = builder.Build();
+
+// Configure pipeline
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+}
+else
+{
+    app.UseExceptionHandler("/Error");
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+app.UseAntiforgery();
+
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
+
+app.MapHub<EconomicGame.Hubs.GameHub>("/gameHub");
+
+app.Run();

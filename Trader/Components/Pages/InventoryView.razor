@@ -1,0 +1,265 @@
+@using EconomicGame
+@using EconomicGame.Configuration
+@inject EconomicGame.Services.GameEngine GameEngine
+
+<div class="inventory">
+    <h2>📦 Инвентарь</h2>
+    
+    @if (Player == null)
+    {
+        <p>Создайте персонажа для просмотра инвентаря.</p>
+    }
+    else
+    {
+        <!-- Storage summary -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h5>📊 Использовано</h5>
+                        <h2 class="@(Player.AvailableCargoSpace < 0 ? "text-danger" : "text-primary")">
+                            @Player.CurrentCargoUsed / @Player.TotalCargoCapacity
+                        </h2>
+                        <div class="progress" style="height: 20px;">
+                            @{
+                                var usagePercent = Player.TotalCargoCapacity > 0 
+                                    ? Math.Min(100, (int)((double)Player.CurrentCargoUsed / Player.TotalCargoCapacity * 100)) 
+                                    : 0;
+                                var progressClass = usagePercent > 90 ? "bg-danger" : usagePercent > 70 ? "bg-warning" : "bg-success";
+                            }
+                            <div class="progress-bar @progressClass" style="width: @usagePercent%">
+                                @usagePercent%
+                            </div>
+                        </div>
+                        <small class="text-muted">Свободно: @Player.AvailableCargoSpace ед.</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h5>💰 Стоимость запасов</h5>
+                        @{
+                            var totalValue = Player.Inventory.Sum(i => i.Quantity * GetCurrentPrice(i.ItemName));
+                            var totalCost = Player.Inventory.Sum(i => i.Quantity * i.AveragePrice);
+                            var profit = totalValue - totalCost;
+                        }
+                        <h2 class="text-success">@totalValue.ToString("C")</h2>
+                        <small class="@(profit >= 0 ? "text-success" : "text-danger")">
+                            @(profit >= 0 ? "📈" : "📉") @profit.ToString("C") (@((totalCost > 0 ? (profit / totalCost * 100) : 0).ToString("F1"))%)
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h5>📦 Позиций</h5>
+                        <h2 class="text-info">@Player.Inventory.Count</h2>
+                        <small class="text-muted">уникальных товаров</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inventory tables grouped by category -->
+        @if (Player.Inventory.Any())
+        {
+            var rawMaterials = Player.Inventory.Where(i => IsRawMaterial(i.ItemName)).ToList();
+            var products = Player.Inventory.Where(i => !IsRawMaterial(i.ItemName)).ToList();
+
+            <!-- Raw Materials -->
+            @if (rawMaterials.Any())
+            {
+                <div class="card mb-3">
+                    <div class="card-header bg-secondary text-white">
+                        <h5>⛏️ Сырьё (Raw Materials)</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        @RenderInventoryTable(rawMaterials)
+                    </div>
+                </div>
+            }
+
+            <!-- Products -->
+            @if (products.Any())
+            {
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h5>🏭 Продукция (Products)</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        @RenderInventoryTable(products)
+                    </div>
+                </div>
+            }
+
+            <!-- Grand Total -->
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5>📊 Общий итог</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="h6 text-muted">Всего единиц</div>
+                            <div class="h4">@Player.Inventory.Sum(i => i.Quantity)</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="h6 text-muted">Стоимость</div>
+                            <div class="h4 text-success">@totalValue.ToString("C")</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="h6 text-muted">Сырьё</div>
+                            <div class="h4">@rawMaterials.Sum(i => i.Quantity) шт.</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="h6 text-muted">Продукция</div>
+                            <div class="h4">@products.Sum(i => i.Quantity) шт.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info">
+                <h5>📭 Инвентарь пуст</h5>
+                <p>У тебя пока нет товаров. Иди на <strong>Рынок</strong> или <strong>Биржу</strong>, чтобы что-нибудь купить!</p>
+            </div>
+        }
+
+        <!-- Storage info -->
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5>🚗 Транспорт</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (Player.Vehicle != null)
+                        {
+                            <p><strong>@Player.Vehicle.Emoji @Player.Vehicle.Name</strong></p>
+                            <p>Вместимость: @Player.Vehicle.CargoCapacity ед.</p>
+                        }
+                        else
+                        {
+                            <p class="text-muted">Нет транспорта. Иди в <strong>Логистику</strong>, чтобы купить!</p>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h5>🏭 Склад</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (Player.Warehouse != null)
+                        {
+                            <p><strong>@Player.Warehouse.Emoji @Player.Warehouse.Name</strong></p>
+                            <p>Вместимость: @Player.Warehouse.Capacity ед.</p>
+                        }
+                        else
+                        {
+                            <p class="text-muted">Нет склада. Сначала купи <strong>землю</strong> в Логистике!</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Player? Player { get; set; }
+
+    private decimal GetCurrentPrice(string itemName)
+    {
+        var marketItem = GameEngine.ExchangeItems.FirstOrDefault(i => i.Name == itemName);
+        return marketItem?.CurrentPrice ?? 0;
+    }
+
+    private bool IsRawMaterial(string itemName)
+    {
+        return GameConstants.RawMaterials.Contains(itemName);
+    }
+
+    private RenderFragment RenderInventoryTable(List<InventoryItem> items) => builder =>
+    {
+        builder.OpenElement(0, "table");
+        builder.AddAttribute(1, "class", "table table-striped table-hover mb-0");
+
+        // Header
+        builder.OpenElement(2, "thead");
+        builder.AddAttribute(3, "class", "table-dark");
+        builder.OpenElement(4, "tr");
+        builder.OpenElement(5, "th"); builder.AddContent(6, "Товар"); builder.CloseElement();
+        builder.OpenElement(7, "th"); builder.AddAttribute(8, "class", "text-center"); builder.AddContent(9, "Кол-во"); builder.CloseElement();
+        builder.OpenElement(10, "th"); builder.AddAttribute(11, "class", "text-end"); builder.AddContent(12, "Ср. цена"); builder.CloseElement();
+        builder.OpenElement(13, "th"); builder.AddAttribute(14, "class", "text-end"); builder.AddContent(15, "Текущая"); builder.CloseElement();
+        builder.OpenElement(16, "th"); builder.AddAttribute(17, "class", "text-end"); builder.AddContent(18, "Стоимость"); builder.CloseElement();
+        builder.OpenElement(19, "th"); builder.AddAttribute(20, "class", "text-end"); builder.AddContent(21, "П/У"); builder.CloseElement();
+        builder.CloseElement(); // tr
+        builder.CloseElement(); // thead
+
+        // Body
+        builder.OpenElement(22, "tbody");
+        foreach (var item in items.OrderByDescending(i => i.Quantity * GetCurrentPrice(i.ItemName)))
+        {
+            var currentPrice = GetCurrentPrice(item.ItemName);
+            var itemTotalValue = item.Quantity * currentPrice;
+            var itemTotalCost = item.Quantity * item.AveragePrice;
+            var itemProfit = itemTotalValue - itemTotalCost;
+            var profitPercent = itemTotalCost > 0 ? (itemProfit / itemTotalCost * 100) : 0;
+
+            builder.OpenElement(23, "tr");
+            
+            builder.OpenElement(24, "td");
+            builder.OpenElement(25, "strong"); builder.AddContent(26, item.ItemName); builder.CloseElement();
+            builder.CloseElement();
+
+            builder.OpenElement(27, "td");
+            builder.AddAttribute(28, "class", "text-center");
+            builder.OpenElement(29, "span");
+            builder.AddAttribute(30, "class", "badge bg-secondary");
+            builder.AddContent(31, item.Quantity);
+            builder.CloseElement();
+            builder.CloseElement();
+
+            builder.OpenElement(32, "td");
+            builder.AddAttribute(33, "class", "text-end");
+            builder.AddContent(34, item.AveragePrice.ToString("C"));
+            builder.CloseElement();
+
+            builder.OpenElement(35, "td");
+            builder.AddAttribute(36, "class", "text-end");
+            var priceClass = currentPrice > item.AveragePrice ? "text-success" : currentPrice < item.AveragePrice ? "text-danger" : "";
+            var arrow = currentPrice > item.AveragePrice ? " ⬆️" : currentPrice < item.AveragePrice ? " ⬇️" : "";
+            builder.OpenElement(37, "span");
+            builder.AddAttribute(38, "class", priceClass);
+            builder.AddContent(39, currentPrice.ToString("C") + arrow);
+            builder.CloseElement();
+            builder.CloseElement();
+
+            builder.OpenElement(40, "td");
+            builder.AddAttribute(41, "class", "text-end");
+            builder.AddContent(42, itemTotalValue.ToString("C"));
+            builder.CloseElement();
+
+            builder.OpenElement(43, "td");
+            builder.AddAttribute(44, "class", "text-end");
+            builder.OpenElement(45, "span");
+            builder.AddAttribute(46, "class", itemProfit >= 0 ? "text-success" : "text-danger");
+            builder.AddContent(47, $"{(itemProfit >= 0 ? "+" : "")}{itemProfit:C} ({profitPercent:F1}%)");
+            builder.CloseElement();
+            builder.CloseElement();
+
+            builder.CloseElement(); // tr
+        }
+        builder.CloseElement(); // tbody
+
+        builder.CloseElement(); // table
+    };
+}

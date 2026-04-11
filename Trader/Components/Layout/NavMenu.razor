@@ -1,0 +1,56 @@
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">Trader</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+<div class="nav flex-column">
+    <a class="nav-link" href="#" @onclick='() => SetView("Market")'>Рынок</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("StockExchange")'>Биржа</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("StockMarket")'>📊 Фонд. рынок</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("TradeListings")'>Trade Listings</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("Bank")'>Банк</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("Housing")'>🏠 Жильё</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("Logistics")'>🚛 Логистика</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("Production")'>🏭 Производство</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("Inventory")'>📦 Инвентарь</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("Bar")'>🍺 Бар</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("Events")'>🎲 События</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("Save")'>💾 Сохранение</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("AIPlayers")'>AI Traders</a>
+    <a class="nav-link" href="#" @onclick='() => SetView("Profile")'>Профиль</a>
+</div>
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+
+    <nav class="nav flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="counter">
+                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="weather">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
+            </NavLink>
+        </div>
+    </nav>
+</div>
+
+@code {
+    [Parameter]
+    public EventCallback<string> OnViewChange { get; set; }
+
+    private async Task SetView(string view)
+    {
+        await OnViewChange.InvokeAsync(view);
+    }
+}

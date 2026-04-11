@@ -1,0 +1,161 @@
+@using EconomicGame
+@inject EconomicGame.Services.GameEngine GameEngine
+
+<div class="events">
+    <h2>🎲 События</h2>
+    
+    @if (Player == null)
+    {
+        <p>Создайте персонажа для просмотра событий.</p>
+    }
+    else
+    {
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h5>Ваш профиль</h5>
+                        <p><strong>Имя:</strong> @Player.Name</p>
+                        <p><strong>Деньги:</strong> @Player.Money.ToString("C")</p>
+                        <p><strong>Репутация:</strong> 
+                            <span class="badge @GetReputationBadgeClass()">
+                                @Player.Reputation / 100
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (!GetActiveEvents().Any())
+        {
+            <div class="alert alert-info">
+                <h5>📭 Нет активных событий</h5>
+                <p>Продолжайте играть — скоро что-нибудь произойдёт!</p>
+            </div>
+        }
+        else
+        {
+            <div class="row">
+                @foreach (var gameEvent in GetActiveEvents())
+                {
+                    <div class="col-md-6 mb-3">
+                        <div class="card @GetEventCardClass(gameEvent)">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">@gameEvent.Title</h5>
+                                <span class="badge bg-secondary">
+                                    ⏰ @GetTimeRemaining(gameEvent)
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">@gameEvent.Description</p>
+                                
+                                <hr />
+                                
+                                <div class="d-grid gap-2">
+                                    @foreach (var choice in gameEvent.Choices)
+                                    {
+                                        var canAfford = !choice.Cost.HasValue || Player.Money >= choice.Cost.Value;
+                                        <button class="btn @(canAfford ? "btn-primary" : "btn-secondary")" 
+                                                disabled="@(!canAfford)"
+                                                @onclick="() => MakeChoice(gameEvent, choice)">
+                                            @choice.Text
+                                            @if (!canAfford && choice.Cost.HasValue)
+                                            {
+                                                <span class="text-warning">(недостаточно денег)</span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert @_messageClass mt-3">
+                <strong>Результат:</strong> @_message
+            </div>
+        }
+
+        <hr />
+        
+        <div class="mt-4">
+            <h4>📜 История событий</h4>
+            @{
+                var completedEvents = Player.PendingEvents.Where(e => e.IsExpired).OrderByDescending(e => e.ExpiresAt).Take(5).ToList();
+            }
+            @if (completedEvents.Any())
+            {
+                <ul class="list-group">
+                    @foreach (var evt in completedEvents)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>@evt.Title</strong>
+                                <br />
+                                <small class="text-muted">@evt.OutcomeMessage</small>
+                            </div>
+                            <span class="badge bg-secondary">Завершено</span>
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <p class="text-muted">История пуста. Принимай решения!</p>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Player? Player { get; set; }
+
+    private string _message = "";
+    private string _messageClass = "alert-info";
+
+    private List<GameEvent> GetActiveEvents()
+    {
+        return Player?.PendingEvents.Where(e => !e.IsExpired).ToList() ?? new List<GameEvent>();
+    }
+
+    private string GetTimeRemaining(GameEvent evt)
+    {
+        var remaining = evt.ExpiresAt - GameEngine.CurrentTime;
+        if (remaining.TotalMinutes < 0) return "Истекло!";
+        if (remaining.TotalHours >= 1) return $"{(int)remaining.TotalHours}ч {remaining.Minutes}м";
+        return $"{remaining.Minutes}м";
+    }
+
+    private string GetEventCardClass(GameEvent evt)
+    {
+        var remaining = evt.ExpiresAt - GameEngine.CurrentTime;
+        if (remaining.TotalMinutes < 15) return "border-danger";
+        if (remaining.TotalMinutes < 30) return "border-warning";
+        return "border-primary";
+    }
+
+    private string GetReputationBadgeClass()
+    {
+        if (Player == null) return "bg-secondary";
+        if (Player.Reputation >= 80) return "bg-success";
+        if (Player.Reputation >= 50) return "bg-primary";
+        if (Player.Reputation >= 30) return "bg-warning";
+        return "bg-danger";
+    }
+
+    private void MakeChoice(GameEvent gameEvent, EventChoice choice)
+    {
+        if (Player == null) return;
+
+        var result = GameEngine.RespondToEvent(Player, gameEvent.EventId, choice.ChoiceId);
+        _message = result;
+        _messageClass = result.Contains("ухудш") || result.Contains("развод") ? "alert-warning" : "alert-success";
+        StateHasChanged();
+    }
+}

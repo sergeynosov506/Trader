@@ -1,0 +1,294 @@
+﻿@using EconomicGame.Configuration
+@inject EconomicGame.Services.GameEngine GameEngine
+
+<div class="stock-exchange">
+    <h2>Stock Exchange</h2>
+    
+    @if (Player == null)
+    {
+        <p>Please create a player first!</p>
+    }
+    else if (Player.Vehicle == null)
+    {
+        <div class="alert alert-danger">
+            <strong>Access Denied!</strong> You need a car to travel to the Stock Exchange. <br/>
+            Visit the Market to buy one.
+        </div>
+    }
+    else if (GameEngine.CurrentTime.Hour < 9 || GameEngine.CurrentTime.Hour >= 17)
+    {
+        <div class="alert alert-warning">
+            <strong>Closed!</strong> The Stock Exchange is open from 09:00 to 17:00. <br/>
+            Current Time: @GameEngine.CurrentTime.ToShortTimeString()
+        </div>
+    }
+    else
+    {
+        var rawMaterials = Items.Where(i => IsRawMaterial(i.Name)).ToList();
+        var products = Items.Where(i => !IsRawMaterial(i.Name)).ToList();
+
+        <!-- Raw Materials Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-secondary text-white">
+                <h5>⛏️ Сырьё (Raw Materials)</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Товар</th>
+                            <th>Цена</th>
+                            <th>Доступно</th>
+                            <th>История</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in rawMaterials)
+                        {
+                            <tr>
+                                <td><strong>@item.Name</strong></td>
+                                <td>@item.CurrentPrice.ToString("C")</td>
+                                <td>@item.AvailableQuantity</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info" @onclick="() => ShowPriceHistory(item)">📈</button>
+                                </td>
+                                <td>
+                                    <input type="number" @bind="_quantities[item.ItemId]" min="1" max="@item.AvailableQuantity" class="form-control form-control-sm d-inline-block" style="width: 60px;" />
+                                    <button class="btn btn-sm btn-success" @onclick="() => BuyItem(item)">Купить</button>
+                                    <button class="btn btn-sm btn-warning" @onclick="() => SellItem(item)">Продать</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => SellAllItem(item)" title="Продать всё">📤</button>
+                                    <div class="small text-muted mt-1" style="font-size: 0.75rem;">
+                                        💼 Рейс: <span class="text-info">@Player.Vehicle.CargoCapacity</span> | 
+                                        📦 Склад: <span class="text-info">@Player.AvailableCargoSpace</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Products Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white">
+                <h5>🏭 Продукция (Products)</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Товар</th>
+                            <th>Цена</th>
+                            <th>Доступно</th>
+                            <th>История</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in products)
+                        {
+                            <tr>
+                                <td><strong>@item.Name</strong></td>
+                                <td>@item.CurrentPrice.ToString("C")</td>
+                                <td>@item.AvailableQuantity</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info" @onclick="() => ShowPriceHistory(item)">📈</button>
+                                </td>
+                                <td>
+                                    <input type="number" @bind="_quantities[item.ItemId]" min="1" max="@item.AvailableQuantity" class="form-control form-control-sm d-inline-block" style="width: 60px;" />
+                                    <button class="btn btn-sm btn-success" @onclick="() => BuyItem(item)">Купить</button>
+                                    <button class="btn btn-sm btn-warning" @onclick="() => SellItem(item)">Продать</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => SellAllItem(item)" title="Продать всё">📤</button>
+                                    <div class="small text-muted mt-1" style="font-size: 0.75rem;">
+                                        💼 Рейс: <span class="text-info">@Player.Vehicle.CargoCapacity</span> | 
+                                        📦 Склад: <span class="text-info">@Player.AvailableCargoSpace</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert alert-info">@_message</div>
+        }
+
+        @if (SelectedItem != null && SelectedItem.PriceHistory.Any())
+        {
+            <div class="price-history mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h3>📈 Price History - @SelectedItem.Name</h3>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectedItem = null">✕ Close</button>
+                </div>
+                
+                @{
+                    var prices = SelectedItem.PriceHistory.ToList();
+                    var minPrice = prices.Min();
+                    var maxPrice = prices.Max();
+                    var priceRange = maxPrice - minPrice;
+                    if (priceRange == 0) priceRange = 1; // Prevent division by zero
+                    
+                    var chartWidth = 600;
+                    var chartHeight = 200;
+                    var padding = 50;
+                    var graphWidth = chartWidth - padding * 2;
+                    var graphHeight = chartHeight - padding;
+                    
+                    // Calculate points for polyline
+                    var points = new List<string>();
+                    var areaPoints = new List<string>();
+                    areaPoints.Add($"{padding},{chartHeight - padding}"); // Bottom left
+                    
+                    for (int i = 0; i < prices.Count; i++)
+                    {
+                        var x = padding + (i * graphWidth / Math.Max(1, prices.Count - 1));
+                        var y = chartHeight - padding - (int)(((double)(prices[i] - minPrice) / (double)priceRange) * graphHeight);
+                        points.Add($"{x},{y}");
+                        areaPoints.Add($"{x},{y}");
+                    }
+                    areaPoints.Add($"{padding + graphWidth},{chartHeight - padding}"); // Bottom right
+                    
+                    var currentPrice = prices.LastOrDefault();
+                    var previousPrice = prices.Count > 1 ? prices[prices.Count - 2] : currentPrice;
+                    var trend = currentPrice > previousPrice ? "📈" : (currentPrice < previousPrice ? "📉" : "➡️");
+                    var trendColor = currentPrice > previousPrice ? "#28a745" : (currentPrice < previousPrice ? "#dc3545" : "#6c757d");
+                }
+                
+                <div class="card">
+                    <div class="card-body p-2" style="background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);">
+                        <!-- Price summary -->
+                        <div class="d-flex justify-content-between text-white mb-2 px-2">
+                            <span>Min: <strong class="text-danger">@minPrice.ToString("C")</strong></span>
+                            <span>Current: <strong style="color: @trendColor">@currentPrice.ToString("C") @trend</strong></span>
+                            <span>Max: <strong class="text-success">@maxPrice.ToString("C")</strong></span>
+                        </div>
+                        
+                        <!-- SVG Chart -->
+                        <svg width="100%" viewBox="0 0 @chartWidth @chartHeight" style="max-width: 100%;">
+                            <!-- Background grid -->
+                            @for (int i = 0; i <= 4; i++)
+                            {
+                                var y = padding + (i * graphHeight / 4);
+                                <line x1="@padding" y1="@y" x2="@(chartWidth - padding)" y2="@y" 
+                                      stroke="rgba(255,255,255,0.1)" stroke-dasharray="5,5" />
+                            }
+                            
+                            <!-- Area fill under line -->
+                            <polygon points="@string.Join(" ", areaPoints)" 
+                                     fill="url(#gradient-@SelectedItem.ItemId)" opacity="0.3" />
+                            
+                            <!-- Gradient definition -->
+                            <defs>
+                                <linearGradient id="gradient-@SelectedItem.ItemId" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" style="stop-color: @trendColor; stop-opacity: 0.8" />
+                                    <stop offset="100%" style="stop-color: @trendColor; stop-opacity: 0.1" />
+                                </linearGradient>
+                            </defs>
+                            
+                            <!-- Price line -->
+                            <polyline points="@string.Join(" ", points)" 
+                                      fill="none" stroke="@trendColor" stroke-width="3" 
+                                      stroke-linecap="round" stroke-linejoin="round" />
+                            
+                            <!-- Data points -->
+                            @for (int i = 0; i < prices.Count; i++)
+                            {
+                                var x = padding + (i * graphWidth / Math.Max(1, prices.Count - 1));
+                                var y = chartHeight - padding - (int)(((double)(prices[i] - minPrice) / (double)priceRange) * graphHeight);
+                                
+                                <circle cx="@x" cy="@y" r="4" fill="@trendColor" stroke="white" stroke-width="1" />
+                                
+                                @if (i == prices.Count - 1)
+                                {
+                                    <!-- Highlight current price -->
+                                    <circle cx="@x" cy="@y" r="8" fill="@trendColor" opacity="0.3">
+                                        <animate attributeName="r" values="8;12;8" dur="1.5s" repeatCount="indefinite" />
+                                    </circle>
+                                }
+                            }
+                        </svg>
+                        
+                        <!-- X-axis labels (HTML instead of SVG text) -->
+                        <div class="d-flex justify-content-between px-4 text-muted small">
+                            <span>← Oldest</span>
+                            <span>Latest →</span>
+                        </div>
+                        
+                        <div class="text-center text-muted small mt-1">
+                            @prices.Count price points tracked
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public List<EconomicGame.MarketItem> Items { get; set; } = new List<EconomicGame.MarketItem>();
+    
+    [Parameter]
+    public EconomicGame.Player? Player { get; set; }
+    
+    private EconomicGame.MarketItem? SelectedItem { get; set; }
+    private Dictionary<Guid, int> _quantities = new();
+    private string _message = "";
+
+    protected override void OnParametersSet()
+    {
+        // Initialize quantities dictionary
+        foreach (var item in Items)
+        {
+            if (!_quantities.ContainsKey(item.ItemId))
+            {
+                _quantities[item.ItemId] = 1;
+            }
+        }
+    }
+
+    private void ShowPriceHistory(EconomicGame.MarketItem item)
+    {
+        SelectedItem = item;
+    }
+
+    private void BuyItem(EconomicGame.MarketItem item)
+    {
+        if (Player == null) return;
+        var quantity = _quantities.GetValueOrDefault(item.ItemId, 1);
+        _message = GameEngine.BuyItem(Player, item, quantity);
+        StateHasChanged();
+    }
+
+    private void SellItem(EconomicGame.MarketItem item)
+    {
+        if (Player == null) return;
+        var quantity = _quantities.GetValueOrDefault(item.ItemId, 1);
+        _message = GameEngine.SellItem(Player, item, quantity);
+        StateHasChanged();
+    }
+
+    private void SellAllItem(EconomicGame.MarketItem item)
+    {
+        if (Player == null) return;
+        var inventoryItem = Player.Inventory.FirstOrDefault(i => i.ItemName == item.Name);
+        if (inventoryItem == null || inventoryItem.Quantity <= 0)
+        {
+            _message = $"❌ У вас нет {item.Name} для продажи!";
+            StateHasChanged();
+            return;
+        }
+        _message = GameEngine.SellItem(Player, item, inventoryItem.Quantity);
+        StateHasChanged();
+    }
+
+    private bool IsRawMaterial(string itemName)
+    {
+        return GameConstants.RawMaterials.Contains(itemName);
+    }
+}

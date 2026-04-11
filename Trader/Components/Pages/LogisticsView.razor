@@ -1,0 +1,471 @@
+@using EconomicGame
+@using EconomicGame.Configuration
+@using EconomicGame.Models
+@inject EconomicGame.Services.GameEngine GameEngine
+
+<div class="logistics">
+    <h2>🚛 Логистика</h2>
+    
+    @if (Player == null)
+    {
+        <p>Создайте персонажа для управления логистикой.</p>
+    }
+    else
+    {
+        <!-- Status overview -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card @(Player.Vehicle == null ? "border-warning" : "border-success")">
+                    <div class="card-header">
+                        <h5>📊 Вместимость</h5>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2>@Player.CurrentCargoUsed / @Player.TotalCargoCapacity</h2>
+                        <div class="progress" style="height: 25px;">
+                            @{
+                                var usagePercent = Player.TotalCargoCapacity > 0 
+                                    ? (double)Player.CurrentCargoUsed / Player.TotalCargoCapacity * 100 
+                                    : 0;
+                                var progressClass = usagePercent > 90 ? "bg-danger" : usagePercent > 70 ? "bg-warning" : "bg-success";
+                            }
+                            <div class="progress-bar @progressClass" style="width: @usagePercent%;">
+                                @($"{usagePercent:F0}%")
+                            </div>
+                        </div>
+                        <p class="mt-2 text-muted">
+                            Свободно: @Player.AvailableCargoSpace ед.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>💰 Финансы</h5>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Деньги:</strong> @Player.Money.ToString("C")</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>📦 Текущие активы</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>
+                            <strong>Транспорт:</strong> 
+                            @(Player.Vehicle != null ? $"{Player.Vehicle.Emoji} {Player.Vehicle.Name}" : "❌ Нет")
+                        </p>
+                        <p>
+                            <strong>Земля:</strong> 
+                            @(Player.Land != null ? $"{Player.Land.Emoji} {Player.Land.Name}" : "❌ Нет")
+                        </p>
+                        <p>
+                            <strong>Склады:</strong> 
+                            @if (Player.Warehouses.Any())
+                            {
+                                <span>@Player.Warehouses.Count / @Player.MaxWarehouses (@string.Join(", ", Player.Warehouses.Select(w => $"{w.Emoji} {w.Name}")))</span>
+                            }
+                            else
+                            {
+                                <span>❌ Нет</span>
+                            }
+                        </p>
+                        <p>
+                            <strong>Лицензия:</strong>
+                            @if (Player.TradingLicenseLevel > 0)
+                            {
+                                <span class="badge bg-success">Ур. @Player.TradingLicenseLevel</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Нет</span>
+                            }
+                        </p>
+                        @if (Player.Factories.Any())
+                        {
+                            <p><strong>Заводы:</strong> @string.Join(", ", Player.Factories.Select(f => f.Emoji))</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Message -->
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert @_messageClass mb-4">@_message</div>
+        }
+
+        <!-- Vehicles -->
+        <h4>🚗 Транспорт</h4>
+        <p class="text-muted">Транспорт = мобильное хранилище. Чем больше машина, тем больше можешь возить.</p>
+        <div class="row mb-4">
+            @foreach (var vehicle in EconomicGame.Services.GameEngine.AvailableVehicles)
+            {
+                var isOwned = Player.Vehicle?.Type == vehicle.Type;
+                var canAfford = Player.Money >= vehicle.Price || 
+                    (Player.Vehicle != null && Player.Money + Player.Vehicle.PurchasePrice * 0.6m >= vehicle.Price);
+                
+                <div class="col-md-3 mb-3">
+                    <div class="card h-100 text-center @(isOwned ? "border-success" : "")">
+                        <div class="card-header">
+                            <h1>@vehicle.Emoji</h1>
+                        </div>
+                        <div class="card-body">
+                            <h5>@vehicle.Name</h5>
+                            <p class="text-primary fw-bold">@vehicle.Price.ToString("C")</p>
+                            <p class="small text-muted">Вместимость: @vehicle.Capacity ед.</p>
+                        </div>
+                        <div class="card-footer">
+                            @if (isOwned)
+                            {
+                                <button class="btn btn-outline-danger btn-sm w-100" @onclick="SellVehicle">
+                                    Продать (60%)
+                                </button>
+                            }
+                            else if (!canAfford)
+                            {
+                                <button class="btn btn-secondary btn-sm w-100" disabled>
+                                    Не хватает
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary btn-sm w-100" 
+                                        @onclick="() => BuyVehicle(vehicle.Type)">
+                                    @(Player.Vehicle != null ? "Trade-in" : "Купить")
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Land -->
+        <h4>🏞️ Земельные участки</h4>
+        <p class="text-muted">Земля нужна для постройки склада. Чем больше участок, тем больше склад можно построить.</p>
+        <div class="row mb-4">
+            @foreach (var land in EconomicGame.Services.GameEngine.AvailableLand)
+            {
+                var isOwned = Player.Land?.Type == land.Type;
+                var canAfford = Player.Money >= land.Price;
+                var hasLand = Player.Land != null;
+                
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100 text-center @(isOwned ? "border-success" : "")">
+                        <div class="card-header">
+                            <h1>@land.Emoji</h1>
+                        </div>
+                        <div class="card-body">
+                            <h5>@land.Name</h5>
+                            <p class="text-primary fw-bold">@land.Price.ToString("C")</p>
+                            <p class="small text-muted">Макс. склад: уровень @land.MaxWarehouse</p>
+                        </div>
+                        <div class="card-footer">
+                            @if (isOwned)
+                            {
+                                <button class="btn btn-outline-danger btn-sm w-100" @onclick="SellLand"
+                                        disabled="@(Player.Warehouses.Any())">
+                                    @(Player.Warehouses.Any() ? "Сначала продай склады" : "Продать (70%)")
+                                </button>
+                            }
+                            else if (hasLand)
+                            {
+                                <span class="badge bg-secondary w-100">Сначала продай текущий</span>
+                            }
+                            else if (!canAfford)
+                            {
+                                <button class="btn btn-secondary btn-sm w-100" disabled>
+                                    Не хватает
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary btn-sm w-100" 
+                                        @onclick="() => BuyLand(land.Type)">
+                                    Купить
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Warehouses -->
+        <h4>📦 Склады (@Player.Warehouses.Count / @Player.MaxWarehouses)</h4>
+        <p class="text-muted">Склад = постоянное хранилище. Требует земельного участка. Купи торговую лицензию для больше складов!</p>
+
+        @if (Player.Warehouses.Any())
+        {
+            <div class="row mb-3">
+                @foreach (var ownedWarehouse in Player.Warehouses)
+                {
+                    <div class="col-md-4 mb-2">
+                        <div class="card border-success">
+                            <div class="card-body text-center">
+                                <h5>@ownedWarehouse.Emoji @ownedWarehouse.Name</h5>
+                                <p class="small">Вместимость: @ownedWarehouse.Capacity ед.</p>
+                                <p class="small text-warning">Обслуживание: @ownedWarehouse.MonthlyMaintenance.ToString("C")/мес</p>
+                                <button class="btn btn-outline-danger btn-sm" @onclick="() => SellWarehouseById(ownedWarehouse.WarehouseId)">Продать (50%)</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="row mb-4">
+            @foreach (var warehouse in EconomicGame.Services.GameEngine.AvailableWarehouses)
+            {
+                var canAfford = Player.Money >= warehouse.Price;
+                var hasLand = Player.Land != null;
+                var landSufficient = hasLand && Player.Land!.MaxWarehouseLevel >= warehouse.RequiredLandLevel;
+                var atLimit = Player.Warehouses.Count >= Player.MaxWarehouses;
+                
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100 text-center">
+                        <div class="card-header">
+                            <h1>@warehouse.Emoji</h1>
+                        </div>
+                        <div class="card-body">
+                            <h5>@warehouse.Name</h5>
+                            <p class="text-primary fw-bold">@warehouse.Price.ToString("C")</p>
+                            <p class="small text-muted">Вместимость: +@warehouse.Capacity ед.</p>
+                            <p class="small text-warning">Обслуживание: @warehouse.Maintenance.ToString("C")/мес</p>
+                            <p class="small text-info">Требует участок ур. @warehouse.RequiredLandLevel+</p>
+                        </div>
+                        <div class="card-footer">
+                            @if (!hasLand)
+                            {
+                                <span class="badge bg-secondary w-100">Сначала купи землю</span>
+                            }
+                            else if (!landSufficient)
+                            {
+                                <span class="badge bg-warning text-dark w-100">Участок слишком мал</span>
+                            }
+                            else if (atLimit)
+                            {
+                                <span class="badge bg-warning text-dark w-100">Лимит складов (купи лицензию)</span>
+                            }
+                            else if (!canAfford)
+                            {
+                                <button class="btn btn-secondary btn-sm w-100" disabled>
+                                    Не хватает
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary btn-sm w-100" 
+                                        @onclick="() => BuyWarehouse(warehouse.Type)">
+                                    Построить
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Industrial Factories -->
+        <h4>🏢 Промышленные объекты</h4>
+        <p class="text-muted">Заводы повышают эффективность производства на 100% для соответствующих товаров.</p>
+        <div class="row mb-4">
+            @foreach (var factory in EconomicGame.Services.GameEngine.AvailableFactories)
+            {
+                var isOwned = Player.Factories.Any(f => f.Type == factory.Type);
+                var canAfford = Player.Money >= factory.Price;
+                var hasLand = Player.Land != null;
+                
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100 text-center @(isOwned ? "border-success" : "")">
+                        <div class="card-header">
+                            <h1>@factory.Emoji</h1>
+                        </div>
+                        <div class="card-body">
+                            <h5>@factory.Name</h5>
+                            <p class="text-primary fw-bold">@factory.Price.ToString("C")</p>
+                            <p class="small text-muted">Цель: @factory.TargetRecipe</p>
+                            <p class="small text-success fw-bold">Бонус: +100% к выходу продукции</p>
+                            <p class="small text-warning">Содержание: @factory.Maintenance.ToString("C")/мес</p>
+                        </div>
+                        <div class="card-footer">
+                            @if (isOwned)
+                            {
+                                <span class="badge bg-success w-100 p-2">Построено</span>
+                            }
+                            else if (!hasLand)
+                            {
+                                <span class="badge bg-secondary w-100">Нужна земля</span>
+                            }
+                            else if (!canAfford)
+                            {
+                                <button class="btn btn-secondary btn-sm w-100" disabled>
+                                    Не хватает
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-success btn-sm w-100" 
+                                        @onclick="() => BuyFactory(factory.Type)">
+                                    Построить завод
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Trading License -->
+        <h4>🎫 Торговая лицензия</h4>
+        <p class="text-muted">Лицензия позволяет иметь больше складов. Текущий уровень: @Player.TradingLicenseLevel (Макс. складов: @Player.MaxWarehouses)</p>
+        <div class="row mb-4">
+            @{
+                var licenses = new[] {
+                    (Level: 1, Name: "Базовая", Cost: GameConstants.TradingLicenseLevel1Cost, MaxWh: GameConstants.MaxWarehousesLevel1),
+                    (Level: 2, Name: "Продвинутая", Cost: GameConstants.TradingLicenseLevel2Cost, MaxWh: GameConstants.MaxWarehousesLevel2),
+                    (Level: 3, Name: "Мастер-лицензия", Cost: GameConstants.TradingLicenseLevel3Cost, MaxWh: GameConstants.MaxWarehousesLevel3)
+                };
+            }
+            @foreach (var lic in licenses)
+            {
+                var isOwned = Player.TradingLicenseLevel >= lic.Level;
+                var canBuy = Player.TradingLicenseLevel == lic.Level - 1 && Player.Money >= lic.Cost;
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100 text-center @(isOwned ? "border-success" : "")">
+                        <div class="card-header">
+                            <h3>🎫</h3>
+                        </div>
+                        <div class="card-body">
+                            <h5>@lic.Name (Ур. @lic.Level)</h5>
+                            <p class="text-primary fw-bold">@lic.Cost.ToString("C")</p>
+                            <p class="small">Макс. складов: @lic.MaxWh</p>
+                        </div>
+                        <div class="card-footer">
+                            @if (isOwned)
+                            {
+                                <span class="badge bg-success w-100">✅ Активна</span>
+                            }
+                            else if (canBuy)
+                            {
+                                <button class="btn btn-primary btn-sm w-100" @onclick="() => BuyLicense(lic.Level)">Купить</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-secondary btn-sm w-100" disabled>@(Player.TradingLicenseLevel < lic.Level - 1 ? $"Сначала купи ур. {lic.Level - 1}" : "Не хватает")</button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Info -->
+        <div class="card bg-light">
+            <div class="card-body">
+                <h5>ℹ️ Как это работает?</h5>
+                <ul class="mb-0">
+                    <li><strong>Транспорт</strong> — мобильное хранение. Без машины нельзя торговать на бирже.</li>
+                    <li><strong>Земля</strong> — нужна для постройки склада.</li>
+                    <li><strong>Склад</strong> — добавляет вместимость, но требует ежемесячной оплаты.</li>
+                    <li><strong>Лицензия</strong> — позволяет иметь несколько складов одновременно.</li>
+                    <li>При покупке большего транспорта — trade-in за 60% стоимости старого.</li>
+                </ul>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Player? Player { get; set; }
+
+    private string _message = "";
+    private string _messageClass = "alert-info";
+
+    private void BuyVehicle(VehicleType vehicleType)
+    {
+        if (Player == null) return;
+        var result = GameEngine.BuyVehicle(Player, vehicleType);
+        _message = result;
+        _messageClass = result.Contains("Поздравляем") ? "alert-success" : "alert-danger";
+        StateHasChanged();
+    }
+
+    private void SellVehicle()
+    {
+        if (Player == null) return;
+        var result = GameEngine.SellVehicle(Player);
+        _message = result;
+        _messageClass = result.Contains("Продал") ? "alert-success" : "alert-danger";
+        StateHasChanged();
+    }
+
+    private void BuyLand(LandType landType)
+    {
+        if (Player == null) return;
+        var result = GameEngine.BuyLand(Player, landType);
+        _message = result;
+        _messageClass = result.Contains("Поздравляем") ? "alert-success" : "alert-danger";
+        StateHasChanged();
+    }
+
+    private void SellLand()
+    {
+        if (Player == null) return;
+        var result = GameEngine.SellLand(Player);
+        _message = result;
+        _messageClass = result.Contains("Продал") ? "alert-success" : "alert-danger";
+        StateHasChanged();
+    }
+
+    private void BuyWarehouse(WarehouseType warehouseType)
+    {
+        if (Player == null) return;
+        var result = GameEngine.BuyWarehouse(Player, warehouseType);
+        _message = result;
+        _messageClass = result.Contains("Построен") ? "alert-success" : "alert-danger";
+        StateHasChanged();
+    }
+
+    private void SellWarehouse()
+    {
+        if (Player == null) return;
+        var result = GameEngine.SellWarehouse(Player);
+        _message = result;
+        _messageClass = result.Contains("Продал") ? "alert-success" : "alert-danger";
+        StateHasChanged();
+    }
+
+    private void SellWarehouseById(Guid warehouseId)
+    {
+        if (Player == null) return;
+        var result = GameEngine.SellWarehouse(Player, warehouseId);
+        _message = result;
+        _messageClass = result.Contains("Продал") ? "alert-success" : "alert-danger";
+        StateHasChanged();
+    }
+
+    private void BuyLicense(int level)
+    {
+        if (Player == null) return;
+        var result = GameEngine.BuyTradingLicense(Player, level);
+        _message = result;
+        _messageClass = result.Contains("лицензия") ? "alert-success" : "alert-danger";
+        StateHasChanged();
+    }
+
+    private void BuyFactory(FactoryType factoryType)
+    {
+        if (Player == null) return;
+        var result = GameEngine.BuyFactory(Player, factoryType);
+        _message = result;
+        _messageClass = result.Contains("Построен") ? "alert-success" : "alert-danger";
+        StateHasChanged();
+    }
+}

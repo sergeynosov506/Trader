@@ -1,0 +1,303 @@
+@using EconomicGame
+@using EconomicGame.Models
+@inject EconomicGame.Services.GameEngine GameEngine
+
+<div class="production">
+    <h2>🏭 Производство</h2>
+    
+    @if (Player == null)
+    {
+        <p>Создайте персонажа для доступа к производству.</p>
+    }
+    else if (Player.Warehouse == null)
+    {
+        <div class="alert alert-warning">
+            <h5>⚠️ Требуется склад</h5>
+            <p>Для производства нужен склад. Купите землю и постройте склад в разделе <strong>Логистика</strong>.</p>
+        </div>
+    }
+    else
+    {
+        <div class="row mb-4">
+            <!-- Player resources summary -->
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h5>💰 Баланс</h5>
+                        <h3 class="text-success">@Player.Money.ToString("C")</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h5>📦 Склад</h5>
+                        <p>@Player.CurrentCargoUsed / @Player.TotalCargoCapacity</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h5>🏭 @Player.Warehouse.Name</h5>
+                        <p>Вместимость: @Player.Warehouse.Capacity ед.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert @_messageClass alert-dismissible fade show">
+                @_message
+                <button type="button" class="btn-close" @onclick="() => _message = string.Empty"></button>
+            </div>
+        }
+
+        <!-- Recipe Cards -->
+        <div class="row">
+            @foreach (var recipe in ProductionRecipes.AllRecipes)
+            {
+                var canProduce = CanProduce(recipe);
+                var hasResources = HasResources(recipe);
+                var hasMoney = Player.Money >= recipe.ProductionCost;
+                var hasSpace = HasStorageSpace(recipe);
+                
+                <div class="col-md-6 mb-3">
+                    <div class="card @(canProduce ? "border-success" : "border-secondary")">
+                        <div class="card-header d-flex justify-content-between align-items-center @(canProduce ? "bg-success text-white" : "bg-secondary text-white")">
+                            <span style="font-size: 1.5rem;">@recipe.Emoji</span>
+                            <strong>@recipe.Name</strong>
+                            <span class="badge bg-light text-dark">@recipe.ProductionCost.ToString("C")</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">@recipe.Description</p>
+                            
+                            <!-- Inputs -->
+                            <div class="mb-2">
+                                <strong>📥 Требуется:</strong>
+                                <div class="d-flex flex-wrap gap-2 mt-1">
+                                    @foreach (var input in recipe.Inputs)
+                                    {
+                                        var hasItem = GetInventoryQuantity(input.Key) >= input.Value;
+                                        <span class="badge @(hasItem ? "bg-success" : "bg-danger")">
+                                            @input.Key: @input.Value
+                                            (@GetInventoryQuantity(input.Key) в наличии)
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                            
+                            <!-- Outputs -->
+                            <div class="mb-2">
+                                <strong>📤 Производит:</strong>
+                                <div class="d-flex flex-wrap gap-2 mt-1">
+                                    @foreach (var output in recipe.Outputs)
+                                    {
+                                        var efficiencyMultiplier = GetEfficiencyMultiplier(recipe);
+                                        var outputQty = (int)(output.Value * efficiencyMultiplier);
+                                        <span class="badge bg-primary">
+                                            @output.Key: @(outputQty * _productionQuantity)
+                                            @if (efficiencyMultiplier > 1)
+                                            {
+                                                <small class="ms-1">(+100% за завод)</small>
+                                            }
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                            
+                            <!-- Production quantity -->
+                            <div class="d-flex align-items-center gap-2 mt-3">
+                                <label class="mb-0">Кол-во:</label>
+                                <input type="number" @bind="_productionQuantity" min="1" max="10" class="form-control form-control-sm" style="width: 70px;" />
+                                
+                                <button class="btn @(canProduce ? "btn-success" : "btn-secondary") flex-grow-1" 
+                                        @onclick="() => Produce(recipe)" disabled="@(!canProduce)">
+                                    @if (canProduce)
+                                    {
+                                        <span>⚙️ Произвести</span>
+                                    }
+                                    else if (!hasResources)
+                                    {
+                                        <span>❌ Нет ресурсов</span>
+                                    }
+                                    else if (!hasMoney)
+                                    {
+                                        <span>💸 Нет денег</span>
+                                    }
+                                    else if (!hasSpace)
+                                    {
+                                        <span>📦 Нет места</span>
+                                    }
+                                </button>
+                                
+                                <div class="form-check form-switch ms-3">
+                                    <input class="form-check-input" type="checkbox" id="auto-@recipe.RecipeId" 
+                                           checked="@IsAutoProducing(recipe.RecipeId)"
+                                           @onchange="(e) => ToggleAutoProduction(recipe.RecipeId, e.Value)" />
+                                    <label class="form-check-label small" for="auto-@recipe.RecipeId">Авто</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Current Inventory -->
+        <div class="card mt-4">
+            <div class="card-header bg-info text-white">
+                <h5>📦 Инвентарь (для производства)</h5>
+            </div>
+            <div class="card-body">
+                @if (Player.Inventory.Any())
+                {
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var item in Player.Inventory)
+                        {
+                            <span class="badge bg-secondary fs-6 p-2">
+                                @item.ItemName: @item.Quantity шт.
+                            </span>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">Инвентарь пуст. Купите ресурсы на бирже!</p>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Player? Player { get; set; }
+
+    private string _message = "";
+    private string _messageClass = "alert-info";
+    private int _productionQuantity = 1;
+
+    private int GetInventoryQuantity(string itemName)
+    {
+        return Player?.Inventory.FirstOrDefault(i => i.ItemName == itemName)?.Quantity ?? 0;
+    }
+
+    private bool HasResources(ProductionRecipe recipe)
+    {
+        foreach (var input in recipe.Inputs)
+        {
+            if (GetInventoryQuantity(input.Key) < input.Value * _productionQuantity)
+                return false;
+        }
+        return true;
+    }
+
+    private bool HasStorageSpace(ProductionRecipe recipe)
+    {
+        var outputTotal = recipe.Outputs.Sum(o => o.Value) * _productionQuantity;
+        var inputTotal = recipe.Inputs.Sum(i => i.Value) * _productionQuantity;
+        var netChange = outputTotal - inputTotal;
+        return Player!.AvailableCargoSpace >= netChange;
+    }
+
+    private bool CanProduce(ProductionRecipe recipe)
+    {
+        if (Player == null) return false;
+        return HasResources(recipe) && 
+               Player.Money >= recipe.ProductionCost * _productionQuantity &&
+               HasStorageSpace(recipe);
+    }
+
+    private void Produce(ProductionRecipe recipe)
+    {
+        if (Player == null || !CanProduce(recipe)) return;
+
+        // Deduct production cost
+        var totalCost = recipe.ProductionCost * _productionQuantity;
+        Player.Money -= totalCost;
+
+        // Remove input materials
+        foreach (var input in recipe.Inputs)
+        {
+            var requiredQty = input.Value * _productionQuantity;
+            var invItem = Player.Inventory.FirstOrDefault(i => i.ItemName == input.Key);
+            if (invItem != null)
+            {
+                invItem.Quantity -= requiredQty;
+                if (invItem.Quantity <= 0)
+                {
+                    Player.Inventory.Remove(invItem);
+                }
+            }
+        }
+
+        // Add output products
+        var efficiencyMultiplier = GetEfficiencyMultiplier(recipe);
+        foreach (var output in recipe.Outputs)
+        {
+            var outputQty = (int)(output.Value * efficiencyMultiplier * _productionQuantity);
+            var existingItem = Player.Inventory.FirstOrDefault(i => i.ItemName == output.Key);
+            
+            if (existingItem != null)
+            {
+                existingItem.Quantity += outputQty;
+            }
+            else
+            {
+                // Get market price if available, otherwise estimate
+                var marketItem = GameEngine.ExchangeItems.FirstOrDefault(i => i.Name == output.Key);
+                var price = marketItem?.CurrentPrice ?? 100m;
+                
+                Player.Inventory.Add(new InventoryItem
+                {
+                    ItemName = output.Key,
+                    Quantity = outputQty,
+                    PurchasePrice = price,
+                    AveragePrice = price
+                });
+            }
+        }
+
+        var outputNames = string.Join(", ", recipe.Outputs.Select(o => $"{o.Key} x{o.Value * _productionQuantity}"));
+        _message = $"✅ Произведено: {outputNames}! Затраты: {totalCost:C}";
+        _messageClass = "alert-success";
+        
+        StateHasChanged();
+    }
+
+    private bool IsAutoProducing(Guid recipeId)
+    {
+        return Player?.AutoProductionRecipes?.Contains(recipeId) ?? false;
+    }
+
+    private void ToggleAutoProduction(Guid recipeId, object? value)
+    {
+        if (Player == null) return;
+        
+        bool isChecked = (bool)(value ?? false);
+        
+        if (isChecked)
+        {
+            if (!Player.AutoProductionRecipes.Contains(recipeId))
+                Player.AutoProductionRecipes.Add(recipeId);
+        }
+        else
+        {
+            Player.AutoProductionRecipes.Remove(recipeId);
+        }
+        
+        StateHasChanged();
+    }
+
+    private decimal GetEfficiencyMultiplier(ProductionRecipe recipe)
+    {
+        if (Player == null) return 1.0m;
+        
+        var matchingFactory = Player.Factories.FirstOrDefault(f => 
+            EconomicGame.Services.GameEngine.AvailableFactories.Any(af => af.Type == f.Type && af.TargetRecipe == recipe.Name));
+            
+        return matchingFactory?.IsOperational == true ? matchingFactory.EfficiencyMultiplier : 1.0m;
+    }
+}

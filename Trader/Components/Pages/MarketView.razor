@@ -1,0 +1,69 @@
+﻿@page "/market"
+@inject EconomicGame.Services.GameEngine GameEngine
+
+<div class="market">
+    <h2>Market</h2>
+    
+    @if (Player == null)
+    {
+        <p>Please create a player first!</p>
+    }
+    else
+    {
+        <div class="card mb-4 border-primary">
+            <div class="card-body">
+                <h5 class="card-title">Vehicles</h5>
+                @if (Player.Vehicle == null)
+                {
+                    <div class="alert alert-warning">
+                         You need a car to travel to the Bank and Stock Exchange!
+                    </div>
+                    <button class="btn btn-primary" @onclick="BuyCar">Buy Basic Car ($2,000)</button>
+                }
+                else
+                {
+                    <p class="text-success">You own a @Player.Vehicle.Type (Operational: @Player.Vehicle.IsOperational)</p>
+                }
+            </div>
+        </div>
+
+        <h4>Your Inventory</h4>
+        @if (Player.Inventory.Any())
+        {
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Quantity</th>
+                        <th>Purchase Price</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Player.Inventory)
+                    {
+                        <tr>
+                            <td>@item.ItemName</td>
+                            <td>@item.Quantity</td>
+                            <td>@item.PurchasePrice.ToString("C")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p class="text-muted">Your inventory is empty.</p>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public EconomicGame.Player? Player { get; set; }
+
+    private void BuyCar()
+    {
+        if (Player == null) return;
+        GameEngine.BuyCar(Player);
+    }
+}

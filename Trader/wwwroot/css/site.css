@@ -1,0 +1,48 @@
+﻿.container-fluid {
+    height: 100vh;
+}
+
+.sidebar {
+    background-color: #343a40;
+    color: white;
+    padding: 15px;
+    height: 100%;
+}
+
+.nav-link {
+    color: #ffffff;
+    padding: 10px;
+}
+
+    .nav-link:hover {
+        background-color: #495057;
+    }
+
+.main-content {
+    padding: 20px;
+}
+
+.news-ticker {
+    background-color: #f8d7da;
+    padding: 10px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.game-area {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+    .table th, .table td {
+        border: 1px solid #dee2e6;
+        padding: 8px;
+        text-align: left;
+    }
