@@ -1,4 +1,9 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject EconomicGame.Services.GameEngine GameEngine
+@inject EconomicGame.Services.PlayerService PlayerService
+@inject EconomicGame.Services.CorporateRivalryService RivalryService
+@inject LocalizationService Loc
+@implements IDisposable
 
 <div class="page">
     <div class="sidebar">
@@ -6,8 +11,56 @@
     </div>
 
     <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        <div class="top-row px-4 d-flex align-items-center justify-content-between gap-3">
+            @if (Player != null)
+            {
+                <div class="d-flex align-items-center gap-3 flex-wrap header-stats">
+                    <!-- Time & Day Badge -->
+                    <div class="stat-badge d-flex align-items-center gap-2">
+                        <span class="fs-5">🕒</span>
+                        <span class="fw-bold text-primary">@GameEngine.CurrentTime.ToString("t")</span>
+                        <span class="text-muted">(@Loc["home.day"] @((GameEngine.CurrentTime - DateTime.Today).Days + 1))</span>
+                    </div>
+
+                    <!-- Cash / Wallet Badge -->
+                    <div class="stat-badge d-flex align-items-center gap-2">
+                        <span class="fs-5">💵</span>
+                        <span class="fw-bold text-success">@Player.Money.ToString("C")</span>
+                    </div>
+
+                    <!-- AI Escalation Badge (If Active) -->
+                    @if (Player.CorporateThreatLevel > 0.1m)
+                    {
+                        var escalation = RivalryService.CurrentEscalationLevel;
+                        var badgeClass = escalation switch {
+                            3 => "bg-danger-subtle text-danger border-danger-subtle",
+                            2 => "bg-warning-subtle text-warning border-warning-subtle",
+                            1 => "bg-info-subtle text-info border-info-subtle",
+                            _ => "bg-secondary-subtle text-secondary border-secondary-subtle"
+                        };
+                        var escalationLabel = escalation switch
+                        {
+                            3 => Loc["escalation.hostile"],
+                            2 => Loc["escalation.aggressive"],
+                            1 => Loc["escalation.competitive"],
+                            _ => Loc["escalation.neutral"]
+                        };
+                        <div class="stat-badge d-flex align-items-center gap-2 border @badgeClass">
+                            <span class="fw-bold">🚨 @escalationLabel (Lv.@escalation)</span>
+                            <span class="opacity-75">| @Loc["home.threat"]: @((Player.CorporateThreatLevel * 100).ToString("F0"))%</span>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div></div>
+            }
+
+            <div class="d-flex align-items-center gap-3">
+                <LanguageToggle />
+                <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">@Loc["app.about"]</a>
+            </div>
         </div>
 
         <article class="content px-4">
@@ -15,6 +68,24 @@
         </article>
     </main>
 </div>
+
+@code {
+    private EconomicGame.Player? Player => PlayerService.GetCurrentPlayer();
+
+    protected override void OnInitialized()
+    {
+        Loc.OnLanguageChanged += Refresh;
+        GameEngine.OnStateChanged += Refresh;
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= Refresh;
+        GameEngine.OnStateChanged -= Refresh;
+    }
+}
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.

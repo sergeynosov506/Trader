@@ -1,0 +1,340 @@
+@using EconomicGame
+@using EconomicGame.Configuration
+@using EconomicGame.Models
+@using EconomicGame.Models.Poker
+@inject EconomicGame.Services.GameEngine GameEngine
+@inject EconomicGame.Services.PokerService Poker
+@inject LocalizationService Loc
+@implements IDisposable
+
+<style>
+.poker-felt {
+    background: radial-gradient(ellipse at center, #1e5c3a 0%, #0d3521 75%);
+    border: 8px solid #4a2c14;
+    border-radius: 120px;
+    box-shadow: inset 0 0 40px rgba(0,0,0,0.6), 0 6px 20px rgba(0,0,0,0.5);
+}
+.poker-playing-card {
+    width: 52px; height: 74px; background: white; border-radius: 6px;
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+    font-weight: bold; border: 1px solid #bbb; margin: 2px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.35);
+}
+.poker-card-back {
+    background: repeating-linear-gradient(45deg, #7a1f2b, #7a1f2b 6px, #5c1520 6px, #5c1520 12px);
+    color: transparent;
+}
+.poker-seat-box {
+    background: rgba(0,0,0,0.45); border-radius: 10px; min-width: 150px;
+}
+.poker-seat-folded { opacity: 0.45; }
+.poker-seat-turn { box-shadow: 0 0 12px 3px rgba(255,193,7,0.9); }
+</style>
+
+<div class="poker-view mt-4 border p-3" style="background: #16213e; color: #eee; border-radius: 12px;">
+    <h3>🃏 Покер против X-Node</h3>
+
+    @if (Player == null)
+    {
+        <div class="alert alert-warning">Сначала создай игрока.</div>
+    }
+    else if (!Poker.SessionActive)
+    {
+        <p class="text-muted">Здесь играют на настоящие деньги: всё, что ты выиграешь, реально спишется с баланса бота-оппонента. И наоборот.</p>
+
+        <div class="row g-3">
+            @foreach (var tier in new[] { EconomicGame.Services.PokerTableTier.BackRoom, EconomicGame.Services.PokerTableTier.Club, EconomicGame.Services.PokerTableTier.HighRollers })
+            {
+                var info = EconomicGame.Services.PokerService.TierInfo(tier);
+                var blocked = Poker.CanJoin(Player, tier);
+                <div class="col-md-4">
+                    <div class="card bg-dark text-light h-100 @(blocked == null ? "border-success" : "border-secondary")">
+                        <div class="card-body">
+                            <h5>@info.Emoji @Loc.Entity(info.Name)</h5>
+                            <p class="small mb-1">Блайнды: @info.SmallBlind.ToString("C0")/@info.BigBlind.ToString("C0")</p>
+                            <p class="small mb-1">Бай-ин: @info.MinBuyIn.ToString("C0") – @info.MaxBuyIn.ToString("C0")</p>
+                            @if (blocked == null)
+                            {
+                                <div class="input-group input-group-sm my-2">
+                                    <span class="input-group-text">Бай-ин</span>
+                                    <input type="number" class="form-control" @bind="_buyIn" min="@info.MinBuyIn" max="@info.MaxBuyIn" />
+                                </div>
+                                <button class="btn btn-success btn-sm w-100" @onclick="() => Join(tier)">Сесть за стол</button>
+                            }
+                            else
+                            {
+                                <p class="small text-warning mt-2">🔒 @blocked</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        var hand = Poker.Hand;
+        var mySeat = Poker.Seats.FirstOrDefault(s => s.IsHuman);
+
+        <!-- Opponents -->
+        <div class="d-flex flex-wrap justify-content-center gap-3 mb-3">
+            @foreach (var seat in Poker.Seats.Where(s => !s.IsHuman))
+            {
+                bool isTurn = hand != null && hand.WhoseTurn == seat;
+                <div class="poker-seat-box p-2 text-center @(seat.HasFolded ? "poker-seat-folded" : "") @(isTurn ? "poker-seat-turn" : "")">
+                    <div><strong>@seat.Name</strong> @(BotDrunkEmoji(seat))</div>
+                    <div class="small text-warning">@seat.Stack.ToString("C0")</div>
+                    <div class="my-1">
+                        @if (hand != null && seat.IsLive)
+                        {
+                            @if (ShowBotCards(seat))
+                            {
+                                @foreach (var c in seat.HoleCards) { @RenderCard(c) }
+                            }
+                            else
+                            {
+                                <span class="poker-playing-card poker-card-back">🂠</span>
+                                <span class="poker-playing-card poker-card-back">🂠</span>
+                            }
+                        }
+                        else if (seat.HasFolded)
+                        {
+                            <span class="small text-muted">фолд</span>
+                        }
+                    </div>
+                    @if (seat.IsAllIn && seat.IsLive) { <span class="badge bg-danger">ALL-IN</span> }
+                    @if (hand != null && seat.StreetCommitted > 0) { <div class="small">ставка: @seat.StreetCommitted.ToString("C0")</div> }
+                    <button class="btn btn-outline-warning btn-sm mt-1" style="font-size: 0.7rem;"
+                            @onclick="() => BuyDrink(seat.PlayerId)">🥃 Угостить (@GameConstants.WhiskeyPrice.ToString("C0"))</button>
+                </div>
+            }
+        </div>
+
+        <!-- Table felt: board + pot -->
+        <div class="poker-felt p-4 mb-3 text-center">
+            @if (hand != null)
+            {
+                <div class="mb-2">
+                    @foreach (var c in hand.Board) { @RenderCard(c) }
+                    @for (int i = hand.Board.Count; i < 5; i++)
+                    {
+                        <span class="poker-playing-card" style="background: rgba(255,255,255,0.08); border-style: dashed;"></span>
+                    }
+                </div>
+                <h5 class="text-warning mb-0">Банк: @hand.TotalPot.ToString("C0")</h5>
+                <div class="small text-light">@StreetName(hand.Street)</div>
+            }
+            else
+            {
+                <h5 class="text-light my-4">Стол ждёт раздачи…</h5>
+            }
+        </div>
+
+        <!-- My seat -->
+        @if (mySeat != null)
+        {
+            bool myTurn = hand != null && hand.WhoseTurn == mySeat;
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 p-2 poker-seat-box @(myTurn ? "poker-seat-turn" : "")">
+                <div>
+                    <strong>@mySeat.Name</strong> — фишки: <span class="text-warning">@mySeat.Stack.ToString("C0")</span>
+                    @if (hand != null && mySeat.StreetCommitted > 0) { <span class="small ms-2">ставка: @mySeat.StreetCommitted.ToString("C0")</span> }
+                </div>
+                <div>
+                    @if (hand != null && mySeat.HoleCards.Length == 2 && !mySeat.HasFolded)
+                    {
+                        @foreach (var c in mySeat.HoleCards) { @RenderCard(c) }
+                    }
+                </div>
+
+                @if (myTurn && hand != null)
+                {
+                    var toCall = hand.AmountToCall(mySeat);
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <button class="btn btn-danger btn-sm" @onclick="() => Act(PokerActionType.Fold)">Фолд</button>
+                        @if (toCall <= 0)
+                        {
+                            <button class="btn btn-secondary btn-sm" @onclick="() => Act(PokerActionType.Check)">Чек</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-primary btn-sm" @onclick="() => Act(PokerActionType.Call)">Колл @Math.Min(toCall, mySeat.Stack).ToString("C0")</button>
+                        }
+                        <div class="input-group input-group-sm" style="width: 170px;">
+                            <span class="input-group-text">До</span>
+                            <input type="number" class="form-control" @bind="_raiseTo" min="@hand.MinRaiseTo" />
+                        </div>
+                        <button class="btn btn-warning btn-sm" @onclick="() => Act(PokerActionType.Raise, _raiseTo)">Рейз</button>
+                        <button class="btn btn-outline-warning btn-sm" @onclick="() => { _raiseTo = hand.MinRaiseTo; }">Мин</button>
+                        <button class="btn btn-outline-warning btn-sm" @onclick="() => { _raiseTo = mySeat.StreetCommitted + hand.TotalPot; }">Пот</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => Act(PokerActionType.AllIn)">ОЛЛ-ИН</button>
+                    </div>
+                }
+                else if (hand == null || hand.IsOver)
+                {
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-success" @onclick="Deal">🃏 Раздать</button>
+                        <button class="btn btn-outline-light" @onclick="Leave">🚪 Встать из-за стола</button>
+                    </div>
+                }
+                else
+                {
+                    <span class="small text-muted">Ход оппонентов…</span>
+                }
+            </div>
+        }
+
+        <!-- Hand results -->
+        @if (hand != null && hand.IsOver && hand.Results.Any())
+        {
+            <div class="alert alert-info mt-2 py-2">
+                @foreach (var r in hand.Results)
+                {
+                    <div>🏆 <strong>@r.Name</strong> — @r.AmountWon.ToString("C0")
+                        @(r.WonWithoutShowdown ? "(все сбросили)" : $"({HandEvaluator.CategoryNameRu(r.Category ?? HandCategory.HighCard)})")</div>
+                }
+            </div>
+        }
+
+        <!-- Table log -->
+        <div class="mt-3 p-2 bg-dark rounded" style="max-height: 160px; overflow-y: auto;">
+            @foreach (var line in Poker.TableLog)
+            {
+                <div class="small border-bottom border-secondary py-1">@line</div>
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert alert-warning mt-2 py-2">@_message</div>
+    }
+
+    <!-- Leaderboard -->
+    <div class="mt-4">
+        <h5>🏆 Лучшие игроки бара</h5>
+        @{ var board = Poker.GetLeaderboard(); }
+        @if (!board.Any())
+        {
+            <p class="small text-muted">Пока никто не сыграл ни одной раздачи.</p>
+        }
+        else
+        {
+            <table class="table table-dark table-sm">
+                <thead><tr><th>#</th><th>Игрок</th><th>Раздач</th><th>Побед</th><th>Профит</th><th>Крупнейший банк</th></tr></thead>
+                <tbody>
+                    @{ int rank = 1; }
+                    @foreach (var row in board)
+                    {
+                        <tr class="@(row.Name == Player?.Name ? "table-active" : "")">
+                            <td>@(rank++)</td>
+                            <td>@(row.IsAI ? "🤖 " : "👤 ")@row.Name</td>
+                            <td>@row.Hands</td>
+                            <td>@row.Wins</td>
+                            <td class="@(row.Profit >= 0 ? "text-success" : "text-danger")">@row.Profit.ToString("C0")</td>
+                            <td>@row.BiggestPot.ToString("C0")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Player? Player { get; set; }
+
+    private decimal _buyIn = 1000m;
+    private decimal _raiseTo = 0m;
+    private string _message = "";
+
+    protected override void OnInitialized()
+    {
+        Poker.OnTableChanged += Refresh;
+        // The poker room is part of the bar — time slows down here too
+        GameEngine.PlayerInBarZone = true;
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    private void Join(EconomicGame.Services.PokerTableTier tier)
+    {
+        if (Player == null) return;
+        _message = Poker.JoinTable(Player, tier, _buyIn);
+    }
+
+    private void Deal()
+    {
+        _message = Poker.StartHand();
+        if (Poker.Hand != null) _raiseTo = Poker.Hand.MinRaiseTo;
+    }
+
+    private void Act(PokerActionType action, decimal betTo = 0)
+    {
+        _message = Poker.PlayerAct(action, betTo);
+        if (Poker.Hand != null && !Poker.Hand.IsOver) _raiseTo = Poker.Hand.MinRaiseTo;
+    }
+
+    private void Leave()
+    {
+        if (Player == null) return;
+        _message = Poker.LeaveTable(Player);
+    }
+
+    private void BuyDrink(Guid botId)
+    {
+        if (Player == null) return;
+        _message = Poker.BuyDrinkForBot(Player, botId);
+    }
+
+    private bool ShowBotCards(PokerSeat seat)
+    {
+        // Bot cards are revealed only at showdown
+        return Poker.Hand != null && Poker.Hand.IsOver && seat.IsLive
+            && Poker.Hand.Results.Any(r => !r.WonWithoutShowdown);
+    }
+
+    private string BotDrunkEmoji(PokerSeat seat)
+    {
+        return Poker.GetBotIntoxication(seat.PlayerId) switch
+        {
+            0 => "",
+            1 => "🍺",
+            2 => "🍻",
+            3 => "🥴",
+            _ => "🍾"
+        };
+    }
+
+    private string StreetName(PokerStreet street) => street switch
+    {
+        PokerStreet.Preflop => "Префлоп",
+        PokerStreet.Flop => "Флоп",
+        PokerStreet.Turn => "Тёрн",
+        PokerStreet.River => "Ривер",
+        PokerStreet.Showdown => "Шоудаун",
+        _ => "Раздача окончена"
+    };
+
+    private RenderFragment RenderCard(Card card) => builder =>
+    {
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", "poker-playing-card");
+        builder.AddAttribute(2, "style", $"color: {(card.IsRed ? "#c0392b" : "#111")};");
+        builder.OpenElement(3, "div");
+        builder.AddAttribute(4, "style", "font-size: 1.1rem;");
+        builder.AddContent(5, card.RankSymbol);
+        builder.CloseElement();
+        builder.OpenElement(6, "div");
+        builder.AddAttribute(7, "style", "font-size: 0.95rem;");
+        builder.AddContent(8, card.SuitSymbol);
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    public void Dispose()
+    {
+        Poker.OnTableChanged -= Refresh;
+        GameEngine.PlayerInBarZone = false;
+    }
+}

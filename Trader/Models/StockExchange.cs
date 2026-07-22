@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using EconomicGame.Configuration;
 
@@ -39,12 +39,29 @@ namespace EconomicGame
                 if (item.CurrentPrice < GameConstants.MinPrice)
                     item.CurrentPrice = GameConstants.MinPrice * 10; // Jump-start back to a reasonable base
 
+                bool isProduct = GameConstants.Products.Contains(item.Name);
+
                 // Phase 2: AI-Driven Supply/Demand
                 // AI Buying increases demand (price up), AI Selling increases supply (price down)
                 decimal netVolume = item.BuyVolume - item.SellVolume;
-                
-                // Scale impact: Use divisor to control market depth (e.g., 1% shift per X units)
-                decimal marketImpact = (netVolume / GameConstants.MarketImpactDivisor) * GameConstants.DemandSupplyImpact;
+
+                // Scale impact: Use divisor to control market depth (e.g., 1% shift per X units).
+                // Products react much stronger to volume than raw materials (rebalance):
+                // dumping finished goods must actually crash their price.
+                decimal impactDivisor = isProduct ? GameConstants.MarketImpactDivisorProducts : GameConstants.MarketImpactDivisor;
+                decimal marketImpact = (netVolume / impactDivisor) * GameConstants.DemandSupplyImpact;
+
+                // --- Demand Capacity (rebalance) ---
+                // The market absorbs only so much product per unit of time at the current price.
+                // Rolling sell-pressure decays each tick; flooding beyond capacity adds an extra
+                // downward push, so monoculture dumping strangles itself.
+                item.AccumulatedSellPressure = item.AccumulatedSellPressure * GameConstants.DemandPressureDecay + item.SellVolume;
+                if (isProduct && item.AccumulatedSellPressure > GameConstants.ProductDemandCapacity)
+                {
+                    decimal overflow = item.AccumulatedSellPressure - GameConstants.ProductDemandCapacity;
+                    decimal dumpPenalty = Math.Min(GameConstants.DemandOverflowMaxImpact, overflow / GameConstants.DemandOverflowImpactDivisor);
+                    marketImpact -= dumpPenalty;
+                }
 
                 // --- Scarcity Impact ---
                 // If stock is below the threshold, apply upward pressure proportional to stock emptiness
@@ -93,15 +110,24 @@ namespace EconomicGame
                 }
 
                 // --- Neural Quantitative Easing (Price Support) ---
-                // If the price is more than 50% below the 30-day average, we apply a subtle upward nudge
-                // This helps the player (and the AI) recover from severe market crashes
-                if (item.PriceHistory.Count >= 10)
+                // RAW MATERIALS ONLY (rebalance): if the price is more than 50% below the average,
+                // apply a subtle upward nudge. Finished products get no bailout — if you flood
+                // the market with sugar, you live with the crash you created.
+                if (!isProduct && item.PriceHistory.Count >= 10)
                 {
                     decimal avgPrice = item.PriceHistory.Average();
                     if (item.CurrentPrice < avgPrice * 0.5m)
                     {
                         item.CurrentPrice *= 1.05m; // 5% support boost per tick
                     }
+                }
+
+                // --- Product Value Floor ---
+                // Finished products shouldn't be "free". If price < $10 and it's a product, 
+                // apply pressure to bring it back to a base commercial value.
+                if (GameConstants.Products.Contains(item.Name) && item.CurrentPrice < 20m)
+                {
+                    item.CurrentPrice += 2.0m; // Flat $2 increase per tick to jump-start from near-zero
                 }
             }
         }

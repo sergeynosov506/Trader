@@ -21,7 +21,12 @@ namespace EconomicGame.Configuration
         public const int MaxPriceHistoryDays = 60; // Double history for smoother long-term averages
         public const decimal MinPrice = 0.05m;
         public const decimal MaxPriceChangePerTick = 0.15m; // ±15% max move
-        public const decimal MarketImpactDivisor = 100m;    // 100 units moved = 1% price shift (was 500)
+        public const decimal MarketImpactDivisor = 500m;    // Raw materials: 500 units moved = 1% price shift
+        public const decimal MarketImpactDivisorProducts = 150m; // Products react 3.3x stronger to dumping
+        public const decimal ProductDemandCapacity = 300m;  // Rolling sell-pressure the market absorbs painlessly
+        public const decimal DemandPressureDecay = 0.97m;   // Sell pressure decays 3% per tick
+        public const decimal DemandOverflowImpactDivisor = 5000m; // Overflow units → extra downward price impact
+        public const decimal DemandOverflowMaxImpact = 0.05m;     // Cap extra dump penalty at 5% per tick
         public const int ScarcityThreshold = 200;           // Below this quantity, price feels pressure
         public const decimal ScarcityImpact = 0.015m;        // Up to 1.5% upward pressure from scarcity (was 5%)
         public const decimal InflationCoolingFactor = 0.98m; // Prices > $1000 shrink by 2% per tick
@@ -29,9 +34,11 @@ namespace EconomicGame.Configuration
         
         // Game Tick Settings
         public const int GameTickIntervalSeconds = 5;
+        public const int NormalTickMinutes = 15;   // Game minutes per tick normally
+        public const int BarTickMinutes = 5;       // Time flows 3x slower while you're at the bar/poker table
         
         // Trading Settings
-        public const decimal CarPrice = 2000m;
+        // (Car price moved to Vehicle Settings as BasicCarPrice to avoid duplication)
         public const decimal SellerFeeRate = 0.10m;           // 10% market commission
         public const decimal CancellationPenaltyRate = 0.05m; // 5% fee for cancelling listing
         public const int MaxActivityLogEntries = 50;
@@ -48,14 +55,21 @@ namespace EconomicGame.Configuration
         public const decimal MaxReputationDiscount = 0.10m;   // Up to 10% interest discount
         
         // Bar Settings
+        public const int BarOpenHour = 18;   // The bar opens in the evening...
+        public const int BarCloseHour = 2;   // ...and closes late at night (crosses midnight)
         public const decimal BeerPrice = 25m;
         public const decimal WhiskeyPrice = 50m;
         public const decimal CocktailPrice = 75m;
+        public const decimal StrangerDrinkPrice = 50m;        // Cost to buy a drink for the stranger who sat down
         public const int SoberUpMinutes = 120;                // 2 hours game time to sober up per drink
         public const double BarEncounterChance = 0.4;         // 40% chance to meet someone
         public const double DrunkBadDecisionChance = 0.3;     // 30% chance for drunk mistakes
         public const decimal GamblingMinBet = 50m;
-        public const decimal GamblingMaxBet = 500m;
+        public const decimal GamblingMaxBet = 25000m;            // Absolute table cap (was 500000 — a money printer)
+        public const decimal MaxBetShareOfNetWorth = 0.10m;      // Bet can't exceed 10% of player's net worth
+        public const decimal BarBankrollInitial = 25000m;        // The bar's cash desk — it can't pay out what it doesn't have
+        public const decimal BarBankrollDailyRefill = 5000m;     // Refilled daily up to BarBankrollInitial
+        public const decimal BarDailyWinCap = 25000m;            // Max net winnings per player per game day
         
         // Housing Settings
         public const decimal SmallRoomPrice = 500m;
@@ -79,6 +93,13 @@ namespace EconomicGame.Configuration
         public const decimal MansionBirthdayBonus = 2000m;
         
         public const int RentDueGameDays = 30;  // Rent due every 30 game days
+
+        // Homeless Penalty (living in your car is not a life)
+        public const int HomelessReputationLossPerDay = 1;      // Reputation drips away every night without a home
+        public const int HomelessReputationFloor = 10;          // Doesn't drop below this from homelessness alone
+        public const double HomelessTheftChancePerNight = 0.12; // Chance thieves hit the parked car overnight
+        public const decimal HomelessTheftCashPercent = 0.04m;  // They take 4% of cash on hand...
+        public const decimal HomelessTheftCashCap = 2500m;      // ...but no more than this per night
         
         // Vehicle Settings
         public const decimal BasicCarPrice = 2000m;
@@ -192,20 +213,30 @@ namespace EconomicGame.Configuration
         public const decimal AICoalitionDumpMultiplier = 3.0m;    // Coalition dumps 3x volume
         public const double AIStockTradeChance = 0.4;             // 40% chance AI trades stocks per tick
         
+        // Agriculture Settings (harvest cycles — plantations no longer drip every tick)
+        public const int SugarCaneCycleDays = 7;           // Game days per harvest cycle
+        public const int SugarCaneCycleYield = 400;        // Units per harvest (per production level)
+        public const int CoffeeCycleDays = 8;
+        public const int CoffeeCycleYield = 250;
+        public const int WheatCycleDays = 5;
+        public const int WheatCycleYield = 500;
+        public const double CropDiseaseChancePerCycle = 0.15; // Chance a cycle gets hit by disease
+        public const int CropCureChemicalsCost = 5;        // Chemicals consumed to auto-cure at harvest
+
         // Production Settings
-        public const decimal BreadProductionCost = 50m;
-        public const int BreadWheatInput = 10;
-        public const int BreadOutput = 8;
+        public const decimal BreadProductionCost = 30m;    // Reduced from 50
+        public const int BreadWheatInput = 2;              // Reduced from 10
+        public const int BreadOutput = 5;                  // Reduced from 8
         
-        public const decimal GoodsProductionCost = 100m;
-        public const int GoodsSteelInput = 5;
-        public const int GoodsOilInput = 3;
-        public const int GoodsOutput = 4;
+        public const decimal GoodsProductionCost = 80m;    // Reduced from 100
+        public const int GoodsSteelInput = 2;              // Reduced from 5
+        public const int GoodsOilInput = 1;                // Reduced from 3
+        public const int GoodsOutput = 3;                  // Reduced from 4
         
-        public const decimal ElectronicsProductionCost = 200m;
-        public const int ElectronicsCopperInput = 8;
-        public const int ElectronicsGoldInput = 2;
-        public const int ElectronicsOutput = 3;
+        public const decimal ElectronicsProductionCost = 150m; // Reduced from 200
+        public const int ElectronicsCopperInput = 4;           // Reduced from 8
+        public const int ElectronicsGoldInput = 1;             // Reduced from 2
+        public const int ElectronicsOutput = 4;                // Increased from 3
         
         public const decimal FuelProductionCost = 150m;
         public const int FuelWheatInput = 20;

@@ -5,55 +5,71 @@
 @inject EconomicGame.Services.PlayerService PlayerService
 @inject EconomicGame.Services.StockMarketService StockMarketService
 @inject EconomicGame.Services.CorporateRivalryService RivalryService
+@inject EconomicGame.Services.NavigationStateService NavState
+@inject LocalizationService Loc
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @implements IDisposable
 
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-2 sidebar">
-            <h3>Trader</h3>
-            <NavMenu OnViewChange="@HandleViewChange" />
-        </div>
-        <div class="col-10 main-content">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h1>Welcome to Trader!</h1>
-                <h3>@GameEngine.CurrentTime.ToString("t") (Day @((GameEngine.CurrentTime - DateTime.Today).Days + 1))</h3>
+<div class="container-fluid py-3">
+    <div class="main-content">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+                <h1>@Loc["home.welcome"]</h1>
+                <h3>@GameEngine.CurrentTime.ToString("t") (@Loc["home.day"] @((GameEngine.CurrentTime - DateTime.Today).Days + 1))</h3>
             </div>
-            
+
             @if (_player == null)
             {
                 <div class="card p-4">
-                    <h3>Enter Your Name</h3>
-                    <input @bind="_playerName" placeholder="Player name" class="form-control mb-2" />
-                    <button @onclick="CreatePlayer" class="btn btn-primary">Start Playing</button>
+                    <h3>@Loc["home.enter_name"]</h3>
+                    <input @bind="_playerName" placeholder="@Loc["home.player_name"]" class="form-control mb-2" />
+                    <button @onclick="CreatePlayer" class="btn btn-primary">@Loc["home.start_playing"]</button>
                 </div>
             }
             else
             {
                 <div class="player-info mb-3">
-                    <h4>Player: @_player.Name</h4>
-                    <p>Money: @_player.Money.ToString("C")</p>
+                    <h4>@Loc["home.player"]: @_player.Name</h4>
+                    <p>@Loc["home.money"]: @_player.Money.ToString("C")</p>
                     @if (_player.Factories.Any())
                     {
-                        <p><strong>Industrial Power:</strong> @(_player.Factories.Count) Factories (@string.Join(" ", _player.Factories.ToList().Select(f => f.Emoji)))</p>
+                        <p><strong>@Loc["home.industrial_power"]:</strong> @(_player.Factories.Count) @Loc["home.factories"] (@string.Join(" ", _player.Factories.ToList().Select(f => f.Emoji)))</p>
                     }
-                    
+
                     @if (_player.CorporateThreatLevel > 0.1m)
                     {
                         var escalation = RivalryService.CurrentEscalationLevel;
                         var escalationClass = escalation switch { 3 => "alert-danger", 2 => "alert-warning", 1 => "alert-info", _ => "alert-secondary" };
-                        var escalationLabel = escalation switch { 3 => "🔴 ВРАЖДЕБНЫЙ", 2 => "🟠 АГРЕССИВНЫЙ", 1 => "🟡 КОНКУРЕНТНЫЙ", _ => "🟢 НЕЙТРАЛЬНЫЙ" };
+                        var escalationLabel = escalation switch
+                        {
+                            3 => Loc["escalation.hostile"],
+                            2 => Loc["escalation.aggressive"],
+                            1 => Loc["escalation.competitive"],
+                            _ => Loc["escalation.neutral"]
+                        };
                         <div class="alert @escalationClass p-2 mb-2">
-                            <strong>AI Escalation: @escalationLabel (Lv.@escalation)</strong>
-                            <span class="ms-2">Threat: @((_player.CorporateThreatLevel * 100).ToString("F0"))%</span>
+                            <strong>@Loc["home.ai_escalation"]: @escalationLabel (Lv.@escalation)</strong>
+                            <span class="ms-2">@Loc["home.threat"]: @((_player.CorporateThreatLevel * 100).ToString("F0"))%</span>
                             @if (_player.RivalPlayerIds.Any())
                             {
                                 var rivals = _player.RivalPlayerIds.ToList();
-                                <div class="small">Rivals: @string.Join(", ", rivals.Select(id => PlayerService.GetAllPlayers().FirstOrDefault(p => p.Id == id)?.Name ?? "Unknown"))</div>
+                                <div class="small">@Loc["home.rivals"]: @string.Join(", ", rivals.Select(id => PlayerService.GetAllPlayers().FirstOrDefault(p => p.Id == id)?.Name ?? "Unknown"))</div>
                             }
                             @if (RivalryService.CoalitionMembers.Any())
                             {
-                                <div class="small text-danger">⚠️ AI Coalition: @RivalryService.CoalitionMembers.Count bots coordinating</div>
+                                <div class="small text-danger">⚠️ @Loc["home.coalition"]: @RivalryService.CoalitionMembers.Count @Loc["home.coalition_bots"]</div>
+                            }
+                        </div>
+                    }
+
+                    @if (_player.IsSabotaged)
+                    {
+                        <div class="alert alert-danger p-3 mb-2 shadow animate-pulse">
+                            <h5 class="mb-1">@Loc["home.ops_blocked"]</h5>
+                            <p class="mb-0">@Loc["home.ops_blocked_desc"]</p>
+                            @if (_player.SabotageEndTime.HasValue)
+                            {
+                                <small>@Loc["home.ops_recovery"]: @(_player.SabotageEndTime.Value.ToString("t"))</small>
                             }
                         </div>
                     }
@@ -66,14 +82,14 @@
                     }
                     else
                     {
-                        <p>No news yet...</p>
+                        <p>@Loc["home.no_news"]</p>
                     }
                 </div>
 
                 <div class="game-area">
                     @if (CurrentView == "Market")
                     {
-                        <MarketView Player="@_player" />
+                        <MarketView Player="@_player" ExchangeItems="@GameEngine.ExchangeItems" />
                     }
                     else if (CurrentView == "StockExchange")
                     {
@@ -107,6 +123,10 @@
                     {
                         <BarView Player="@_player" />
                     }
+                    else if (CurrentView == "Poker")
+                    {
+                        <PokerView Player="@_player" />
+                    }
                     else if (CurrentView == "Inventory")
                     {
                         <InventoryView Player="@_player" />
@@ -114,6 +134,10 @@
                     else if (CurrentView == "Events")
                     {
                         <EventsView Player="@_player" />
+                    }
+                    else if (CurrentView == "Scenarios")
+                    {
+                        <ScenariosView Player="@_player" />
                     }
                     else if (CurrentView == "Save")
                     {
@@ -123,14 +147,18 @@
                     {
                         <AIPlayersView />
                     }
+                    else if (CurrentView == "Profile")
+                    {
+                        <ProfileView Player="@_player" />
+                    }
                     else
                     {
-                        <p>Select a section from the left menu.</p>
+                        <p>@Loc["home.select_section"]</p>
                     }
                 </div>
 
                 <div class="activity-log mt-4 p-3 bg-light border rounded">
-                   <h5>Market Activity</h5>
+                   <h5>@Loc["home.market_activity"]</h5>
                    <ul class="list-unstyled" style="max-height: 200px; overflow-y: auto;">
                        @foreach (var log in GameEngine.MarketActivityLog)
                        {
@@ -141,17 +169,19 @@
             }
         </div>
     </div>
-</div>
 
 @code {
-    private string CurrentView { get; set; } = "";
+    private string CurrentView { get; set; } = "Market";
     private EconomicGame.Player? _player;
     private string _playerName = "";
 
     protected override void OnInitialized()
     {
         _player = PlayerService.GetCurrentPlayer();
+        CurrentView = NavState.CurrentView;
         GameEngine.OnStateChanged += HandleStateChanged;
+        Loc.OnLanguageChanged += HandleStateChanged;
+        NavState.OnViewChanged += HandleViewChanged;
     }
 
     private void HandleStateChanged()
@@ -161,23 +191,54 @@
         InvokeAsync(StateHasChanged);
     }
 
-    private void CreatePlayer()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var savedName = await JS.InvokeAsync<string>("localStorage.getItem", "trader_player_name");
+                if (!string.IsNullOrWhiteSpace(savedName))
+                {
+                    _playerName = savedName;
+                    StateHasChanged();
+                }
+            }
+            catch
+            {
+                // Ignore JS Interop errors during prerendering or other conditions
+            }
+        }
+    }
+
+    private async Task CreatePlayer()
     {
         if (!string.IsNullOrWhiteSpace(_playerName))
         {
+            try
+            {
+                await JS.InvokeVoidAsync("localStorage.setItem", "trader_player_name", _playerName);
+            }
+            catch
+            {
+                // Ignore JS Interop errors
+            }
+
             _player = PlayerService.GetOrCreatePlayer(_playerName);
             StateHasChanged();
         }
     }
 
-    private void HandleViewChange(string view)
+    private void HandleViewChanged(string view)
     {
         CurrentView = view;
-        StateHasChanged();
+        InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()
     {
         GameEngine.OnStateChanged -= HandleStateChanged;
+        Loc.OnLanguageChanged -= HandleStateChanged;
+        NavState.OnViewChanged -= HandleViewChanged;
     }
 }

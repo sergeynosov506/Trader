@@ -1,0 +1,76 @@
+@inject LocalizationService Loc
+@inject IJSRuntime JS
+@implements IDisposable
+
+@{
+    var en = Loc.CurrentLanguage == Language.En;
+}
+
+<div class="btn-group btn-group-sm" role="group" aria-label="@Loc["app.language"]">
+    <button type="button"
+            class="btn @(en ? "btn-primary" : "btn-outline-secondary")"
+            @onclick="@(() => SetLang(Language.En))"
+            title="English">
+        EN
+    </button>
+    <button type="button"
+            class="btn @(!en ? "btn-primary" : "btn-outline-secondary")"
+            @onclick="@(() => SetLang(Language.Ru))"
+            title="Русский">
+        RU
+    </button>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Loc.OnLanguageChanged += StateHasChangedAsync;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // First render is pre-rendered server-side; JS is only available
+        // once we're on the interactive circuit. Load the cookie now and
+        // apply the saved preference.
+        try
+        {
+            var saved = await JS.InvokeAsync<string?>("traderLang.get");
+            if (!string.IsNullOrWhiteSpace(saved)
+                && Enum.TryParse<Language>(saved, ignoreCase: true, out var lang)
+                && lang != Loc.CurrentLanguage)
+            {
+                Loc.CurrentLanguage = lang;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // Safe no-op: if JS isn't ready we just stay on the default (English).
+        }
+    }
+
+    private async Task SetLang(Language lang)
+    {
+        Loc.CurrentLanguage = lang;
+        try
+        {
+            await JS.InvokeVoidAsync("traderLang.set", lang.ToString());
+        }
+        catch
+        {
+            // Cookie persistence is best-effort.
+        }
+    }
+
+    private void StateHasChangedAsync()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= StateHasChangedAsync;
+    }
+}

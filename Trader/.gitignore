@@ -1,6 +1,6 @@
 # .NET build artifacts
-**/bin/
-**/obj/
+bin/
+obj/
 *.user
 *.suo
 
@@ -9,13 +9,13 @@
 .vscode/
 .idea/
 
-# Local build helpers
+# Local build helpers (cloud-adapted csproj bits)
 localrefs/
 nuget.config
 
 # Game saves (player data, not source)
-**/Saves/
-**/saves/
+Saves/
+saves/
 *.save.json
 
 # OS junk

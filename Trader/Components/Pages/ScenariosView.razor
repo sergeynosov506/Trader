@@ -1,0 +1,263 @@
+@using EconomicGame
+@using EconomicGame.Models
+@inject EconomicGame.Services.GameEngine GameEngine
+@inject EconomicGame.Services.PlayerService PlayerService
+@inject LocalizationService Loc
+@implements IDisposable
+
+<div class="scenarios-view">
+    <h2>@Loc["scenario.title"]</h2>
+    <p class="text-muted">@Loc["scenario.subtitle"]</p>
+
+    @if (Player == null)
+    {
+        <div class="alert alert-info">@Loc["scenario.create_character"]</div>
+    }
+    else
+    {
+        @* ------- Active scenario banner ------- *@
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4 class="mb-0">@Loc["scenario.active_header"]</h4>
+            </div>
+            <div class="card-body">
+                @{
+                    var active = GameEngine.ScenarioService.GetActiveScenario(Player);
+                }
+                @if (active == null)
+                {
+                    <p class="text-muted mb-0">@Loc["scenario.no_active"]</p>
+                }
+                else
+                {
+                    var elapsed = GameEngine.ScenarioService.ElapsedDays(Player, GameEngine.CurrentTime);
+                    var remaining = GameEngine.ScenarioService.RemainingDays(Player, GameEngine.CurrentTime);
+                    var progress = Math.Min(100, Math.Max(0, (elapsed / Math.Max(1, active.TimeLimitDays)) * 100));
+                    var netWorth = GameEngine.ScenarioService.ComputeEquity(Player);
+
+                    <h5>@Loc[active.NameKey]</h5>
+                    <p class="small text-muted">@Loc[active.DescriptionKey]</p>
+
+                    <div class="row mb-2">
+                        <div class="col-md-4">
+                            <strong>@Loc["scenario.status"]:</strong>
+                            <span class="badge @StatusBadgeClass(Player.ScenarioStatus)">@StatusText(Player.ScenarioStatus)</span>
+                        </div>
+                        <div class="col-md-4">
+                            <strong>@Loc["scenario.elapsed"]:</strong>
+                            @string.Format(Loc["scenario.days_n"], elapsed)
+                        </div>
+                        <div class="col-md-4">
+                            <strong>@Loc["scenario.time_remaining"]:</strong>
+                            @string.Format(Loc["scenario.days_n"], remaining)
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-md-6">
+                            <strong>@Loc["scenario.goal"]:</strong>
+                            @DescribeGoal(active)
+                        </div>
+                        <div class="col-md-6">
+                            <strong>@Loc["scenario.current_networth"]:</strong>
+                            @netWorth.ToString("C0")
+                        </div>
+                    </div>
+
+                    <div class="progress mb-3" style="height: 1.25rem;">
+                        <div class="progress-bar @ProgressBarClass(Player.ScenarioStatus)"
+                             role="progressbar"
+                             style="width:@progress.ToString("F0")%">
+                            @progress.ToString("F0")%
+                        </div>
+                    </div>
+
+                    @if (Player.ScenarioRivalIds.Any() && Player.ScenarioStatus == ScenarioStatus.Active)
+                    {
+                        <div class="alert alert-warning py-2 small mb-2">
+                            🏁 <strong>Гонка!</strong> Соперники-боты: @RivalNames().
+                            Если кто-то из них наберёт нужный прирост капитала раньше тебя — сценарий проигран.
+                        </div>
+                    }
+                    @if (Player.ScenarioStatus == ScenarioStatus.Lost && !string.IsNullOrEmpty(Player.ScenarioRaceWinner))
+                    {
+                        <div class="alert alert-danger py-2 small mb-2">
+                            🏁 Гонку выиграл <strong>@Player.ScenarioRaceWinner</strong> — он добрался до цели раньше тебя.
+                        </div>
+                    }
+
+                    @if (Player.ScenarioStatus == ScenarioStatus.Active)
+                    {
+                        <button class="btn btn-outline-danger btn-sm" @onclick="AbandonScenario">
+                            @Loc["scenario.abandon_btn"]
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="AbandonScenario">
+                            @Loc["common.close"]
+                        </button>
+                    }
+                }
+            </div>
+        </div>
+
+        @* ------- Available scenarios ------- *@
+        <h4>@Loc["scenario.available"]</h4>
+        @if (!GameEngine.Scenarios.Any())
+        {
+            <div class="alert alert-warning">@Loc["scenario.none_configured"]</div>
+        }
+        else
+        {
+            <div class="alert alert-info small">@Loc["scenario.warning_replaces"]</div>
+            <div class="row">
+                @foreach (var s in GameEngine.Scenarios)
+                {
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <h5>@Loc[s.NameKey]</h5>
+                                <p class="text-muted small flex-grow-1">@Loc[s.DescriptionKey]</p>
+                                <ul class="list-unstyled small mb-3">
+                                    <li><strong>@Loc["scenario.goal"]:</strong> @DescribeGoal(s)</li>
+                                    <li><strong>@Loc["scenario.time_limit"]:</strong> @string.Format(Loc["scenario.days_n"], (double)s.TimeLimitDays)</li>
+                                    @if (s.StartingMoney.HasValue)
+                                    {
+                                        <li><strong>@Loc["scenario.starting_money"]:</strong> @s.StartingMoney.Value.ToString("C0")</li>
+                                    }
+                                    @if (s.StartingLoan > 0)
+                                    {
+                                        <li class="text-danger"><strong>@Loc["scenario.starting_loan"]:</strong> @s.StartingLoan.ToString("C0")</li>
+                                    }
+                                </ul>
+                                <button class="btn btn-primary"
+                                        disabled="@(Player.ScenarioStatus == ScenarioStatus.Active)"
+                                        @onclick="() => StartScenario(s.Id)">
+                                    @Loc["scenario.start_btn"]
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert @_messageClass mt-3">@_message</div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Player? Player { get; set; }
+
+    private string _message = "";
+    private string _messageClass = "alert-info";
+
+    protected override void OnInitialized()
+    {
+        Loc.OnLanguageChanged += Refresh;
+        GameEngine.OnStateChanged += Refresh;
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= Refresh;
+        GameEngine.OnStateChanged -= Refresh;
+    }
+
+    private void StartScenario(string id)
+    {
+        if (Player == null) return;
+        var ok = GameEngine.StartScenarioRace(Player, id);
+        if (ok)
+        {
+            var s = GameEngine.ScenarioService.GetScenario(id);
+            var name = s != null ? Loc[s.NameKey] : id;
+            _message = string.Format(Loc["scenario.started"], name);
+            _messageClass = "alert-success";
+        }
+        StateHasChanged();
+    }
+
+    private string RivalNames()
+    {
+        if (Player == null || !Player.ScenarioRivalIds.Any()) return "";
+        var names = PlayerService.GetAllPlayers()
+            .Where(p => Player.ScenarioRivalIds.Contains(p.Id))
+            .Select(p => p.Name);
+        return string.Join(", ", names);
+    }
+
+    private void AbandonScenario()
+    {
+        if (Player == null) return;
+        GameEngine.ScenarioService.AbandonScenario(Player);
+        _message = Loc["scenario.abandoned"];
+        _messageClass = "alert-secondary";
+        StateHasChanged();
+    }
+
+    private string StatusText(ScenarioStatus s) => s switch
+    {
+        ScenarioStatus.Active => Loc["scenario.status_active"],
+        ScenarioStatus.Won    => Loc["scenario.status_won"],
+        ScenarioStatus.Lost   => Loc["scenario.status_lost"],
+        _                     => Loc["scenario.status_none"]
+    };
+
+    private string StatusBadgeClass(ScenarioStatus s) => s switch
+    {
+        ScenarioStatus.Active => "bg-primary",
+        ScenarioStatus.Won    => "bg-success",
+        ScenarioStatus.Lost   => "bg-danger",
+        _                     => "bg-secondary"
+    };
+
+    private string ProgressBarClass(ScenarioStatus s) => s switch
+    {
+        ScenarioStatus.Won  => "bg-success",
+        ScenarioStatus.Lost => "bg-danger",
+        _                   => ""
+    };
+
+    private string TranslateItemName(string itemName) => itemName.ToLower() switch
+    {
+        "sugar" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Сахар" : "Sugar",
+        "sugarcane" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Сахарный тростник" : "Sugar Cane",
+        "wheat" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Пшеница" : "Wheat",
+        "bread" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Хлеб" : "Bread",
+        "steel" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Сталь" : "Steel",
+        "oil" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Нефть" : "Oil",
+        "gold" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Золото" : "Gold",
+        "copper" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Медь" : "Copper",
+        "goods" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Оборудование" : "Goods",
+        "electronics" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Электроника" : "Electronics",
+        "fuel" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Топливо" : "Fuel",
+        "coffeebeans" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Кофейные зёрна" : "Coffee Beans",
+        "coffee" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Кофе" : "Coffee",
+        "chemicals" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Химикаты" : "Chemicals",
+        "pharmaceuticals" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Фармацевтика" : "Pharmaceuticals",
+        "luxurygoods" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Предметы роскоши" : "Luxury Goods",
+        "textiles" => Loc.CurrentLanguage == EconomicGame.Services.Language.Ru ? "Текстиль" : "Textiles",
+        _ => itemName
+    };
+
+    private string DescribeGoal(Scenario s) => s.Goal.Type switch
+    {
+        ScenarioGoalType.SurviveWithNetWorthAbove =>
+            string.Format(Loc["scenario.goal_survive"], s.TimeLimitDays, s.Goal.Threshold),
+        ScenarioGoalType.ReachNetWorth =>
+            string.Format(Loc["scenario.goal_networth"], s.Goal.Threshold, s.TimeLimitDays),
+        ScenarioGoalType.ReachMoney =>
+            string.Format(Loc["scenario.goal_money"], s.Goal.Threshold, s.TimeLimitDays),
+        ScenarioGoalType.ReachItemStock =>
+            string.Format(Loc["scenario.goal_item_stock"], s.Goal.Threshold, TranslateItemName(s.Goal.ItemName ?? ""), s.TimeLimitDays),
+        _ => ""
+    };
+}

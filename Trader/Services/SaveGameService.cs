@@ -58,6 +58,10 @@ namespace EconomicGame.Services
                 if (player == null)
                     return "❌ Нет активного игрока для сохранения!";
 
+                // Design decision: no saving mid-poker-hand (prevents save-scumming).
+                if (_gameEngine.PokerHandInProgress)
+                    return "❌ Нельзя сохраняться посреди покерной раздачи! Доиграй руку.";
+
                 var saveData = new GameSaveData
                 {
                     SaveName = saveName,
@@ -95,7 +99,8 @@ namespace EconomicGame.Services
                         LinkedCommodity = s.LinkedCommodity,
                         CorrelationFactor = s.CorrelationFactor
                     }).ToList(),
-                    LastDividendPaid = _stockMarketService.LastDividendPaid
+                    LastDividendPaid = _stockMarketService.LastDividendPaid,
+                    BarBankroll = _gameEngine.BarBankroll
                 };
 
                 var json = JsonSerializer.Serialize(saveData, new JsonSerializerOptions 
@@ -159,6 +164,9 @@ namespace EconomicGame.Services
                 // Restore game time
                 _gameEngine.SetCurrentTime(saveData.GameTime);
 
+                // Restore bar cash desk
+                _gameEngine.BarBankroll = saveData.BarBankroll;
+
                 // Restore Stock Market State
                 if (saveData.Stocks != null && saveData.Stocks.Any())
                 {
@@ -215,6 +223,12 @@ namespace EconomicGame.Services
                 Reputation = player.Reputation,
                 IntoxicationLevel = player.IntoxicationLevel,
                 SoberUpTime = player.SoberUpTime,
+                BarWinningsToday = player.BarWinningsToday,
+                BarWinningsDate = player.BarWinningsDate,
+                PokerHandsPlayed = player.PokerHandsPlayed,
+                PokerHandsWon = player.PokerHandsWon,
+                PokerProfit = player.PokerProfit,
+                PokerBiggestPot = player.PokerBiggestPot,
                 
                 IsAI = player.IsAI,
                 Strategy = player.IsAI ? player.Strategy : null,
@@ -236,6 +250,13 @@ namespace EconomicGame.Services
                     CargoCapacity = player.Vehicle.CargoCapacity,
                     PurchasePrice = player.Vehicle.PurchasePrice
                 } : null,
+                Vehicles = player.Vehicles.Select(v => new VehicleSave
+                {
+                    Type = v.Type,
+                    Name = v.Name,
+                    CargoCapacity = v.CargoCapacity,
+                    PurchasePrice = v.PurchasePrice
+                }).ToList(),
 
                 Property = player.Property != null ? new PropertySave
                 {
@@ -246,9 +267,28 @@ namespace EconomicGame.Services
                     GuestCapacity = player.Property.GuestCapacity,
                     BirthdayGiftBonus = player.Property.BirthdayGiftBonus
                 } : null,
+                Properties = player.Properties.Select(p => new PropertySave
+                {
+                    Type = p.Type,
+                    Name = p.Name,
+                    PurchasePrice = p.PurchasePrice,
+                    MonthlyRent = p.MonthlyRent,
+                    GuestCapacity = p.GuestCapacity,
+                    BirthdayGiftBonus = p.BirthdayGiftBonus
+                }).ToList(),
+
+                Lands = player.Lands.Select(l => new LandSave
+                {
+                    Id = l.Id,
+                    Type = l.Type,
+                    Name = l.Name,
+                    PurchasePrice = l.PurchasePrice,
+                    MaxWarehouseLevel = l.MaxWarehouseLevel
+                }).ToList(),
 
                 Land = player.Land != null ? new LandSave
                 {
+                    Id = player.Land.Id,
                     Type = player.Land.Type,
                     Name = player.Land.Name,
                     PurchasePrice = player.Land.PurchasePrice,
@@ -301,8 +341,16 @@ namespace EconomicGame.Services
                     MonthlyMaintenance = f.MonthlyMaintenance,
                     IsOperational = f.IsOperational,
                     EfficiencyMultiplier = f.EfficiencyMultiplier,
-                    ProductionLevel = f.ProductionLevel
-                }).ToList()
+                    ProductionLevel = f.ProductionLevel,
+                    CurrentCycleStart = f.CurrentCycleStart,
+                    IsDiseased = f.IsDiseased
+                }).ToList(),
+
+                AutoProductionRecipes = player.AutoProductionRecipes.ToList(),
+                AutoProductionMinReserves = new Dictionary<Guid, int>(player.AutoProductionMinReserves ?? new()),
+                AutoProductionMaxStock = new Dictionary<Guid, int>(player.AutoProductionMaxStock ?? new()),
+                AutoProductionLevels = new Dictionary<Guid, int>(player.AutoProductionLevels ?? new()),
+                AutoProductionProgress = new Dictionary<Guid, int>(player.AutoProductionProgress ?? new())
             };
         }
 
@@ -314,6 +362,12 @@ namespace EconomicGame.Services
             player.Reputation = save.Reputation;
             player.IntoxicationLevel = save.IntoxicationLevel;
             player.SoberUpTime = save.SoberUpTime;
+            player.BarWinningsToday = save.BarWinningsToday;
+            player.BarWinningsDate = save.BarWinningsDate;
+            player.PokerHandsPlayed = save.PokerHandsPlayed;
+            player.PokerHandsWon = save.PokerHandsWon;
+            player.PokerProfit = save.PokerProfit;
+            player.PokerBiggestPot = save.PokerBiggestPot;
 
             player.IsAI = save.IsAI;
             if (save.IsAI && save.Strategy != null)
@@ -332,43 +386,87 @@ namespace EconomicGame.Services
                 Quantity = i.Quantity
             }).ToList();
 
-            if (save.Vehicle != null)
+            if (save.Vehicles != null && save.Vehicles.Any())
             {
-                player.Vehicle = new Vehicle
+                player.Vehicles = save.Vehicles.Select(v => {
+                    var vehicle = new Vehicle
+                    {
+                        Type = v.Type,
+                        Name = v.Name,
+                        PurchasePrice = v.PurchasePrice,
+                        IsOperational = true
+                    };
+                    var info = GameEngine.AvailableVehicles.FirstOrDefault(av => av.Type == v.Type);
+                    vehicle.CargoCapacity = info != default ? info.Capacity : v.CargoCapacity;
+                    return vehicle;
+                }).ToList();
+            }
+            else if (save.Vehicle != null)
+            {
+                var vehicle = new Vehicle
                 {
                     Type = save.Vehicle.Type,
                     Name = save.Vehicle.Name,
                     PurchasePrice = save.Vehicle.PurchasePrice,
                     IsOperational = true
                 };
-
-                // Phase 11 Migration: Refresh capacity from constants
-                var info = GameEngine.AvailableVehicles.FirstOrDefault(v => v.Type == save.Vehicle.Type);
-                player.Vehicle.CargoCapacity = info != default ? info.Capacity : save.Vehicle.CargoCapacity;
+                var info = GameEngine.AvailableVehicles.FirstOrDefault(av => av.Type == save.Vehicle.Type);
+                vehicle.CargoCapacity = info != default ? info.Capacity : save.Vehicle.CargoCapacity;
+                player.Vehicles.Add(vehicle);
             }
 
-            if (save.Property != null)
+            if (save.Properties != null && save.Properties.Any())
             {
-                player.Property = new Property
+                player.Properties = save.Properties.Select(p => new Property
+                {
+                    Type = p.Type,
+                    Name = p.Name,
+                    PurchasePrice = p.PurchasePrice,
+                    MonthlyRent = p.MonthlyRent,
+                    GuestCapacity = p.GuestCapacity,
+                    BirthdayGiftBonus = p.BirthdayGiftBonus,
+                    PurchaseDate = DateTime.Now,
+                    LastRentPaid = DateTime.Now
+                }).ToList();
+            }
+            else if (save.Property != null)
+            {
+                var property = new Property
                 {
                     Type = save.Property.Type,
                     Name = save.Property.Name,
                     PurchasePrice = save.Property.PurchasePrice,
                     MonthlyRent = save.Property.MonthlyRent,
                     GuestCapacity = save.Property.GuestCapacity,
-                    BirthdayGiftBonus = save.Property.BirthdayGiftBonus
+                    BirthdayGiftBonus = save.Property.BirthdayGiftBonus,
+                    PurchaseDate = DateTime.Now,
+                    LastRentPaid = DateTime.Now
                 };
+                player.Properties.Add(property);
             }
 
-            if (save.Land != null)
+            player.Lands = new List<Land>();
+            if (save.Lands != null && save.Lands.Any())
             {
-                player.Land = new Land
+                player.Lands = save.Lands.Select(sl => new Land
                 {
+                    Id = sl.Id,
+                    Type = sl.Type,
+                    Name = sl.Name,
+                    PurchasePrice = sl.PurchasePrice,
+                    MaxWarehouseLevel = sl.MaxWarehouseLevel
+                }).ToList();
+            }
+            else if (save.Land != null)
+            {
+                player.Lands.Add(new Land
+                {
+                    Id = save.Land.Id,
                     Type = save.Land.Type,
                     Name = save.Land.Name,
                     PurchasePrice = save.Land.PurchasePrice,
                     MaxWarehouseLevel = save.Land.MaxWarehouseLevel
-                };
+                });
             }
 
             // Multi-warehouse restore
@@ -426,9 +524,17 @@ namespace EconomicGame.Services
                 IsOperational = f.IsOperational,
                 EfficiencyMultiplier = f.EfficiencyMultiplier,
                 ProductionLevel = f.ProductionLevel,
+                CurrentCycleStart = f.CurrentCycleStart,
+                IsDiseased = f.IsDiseased,
                 PurchaseDate = DateTime.Now,
                 LastMaintenancePaid = DateTime.Now
             }).ToList();
+
+            player.AutoProductionRecipes = save.AutoProductionRecipes ?? new List<Guid>();
+            player.AutoProductionMinReserves = save.AutoProductionMinReserves ?? new Dictionary<Guid, int>();
+            player.AutoProductionMaxStock = save.AutoProductionMaxStock ?? new Dictionary<Guid, int>();
+            player.AutoProductionLevels = save.AutoProductionLevels ?? new Dictionary<Guid, int>();
+            player.AutoProductionProgress = save.AutoProductionProgress ?? new Dictionary<Guid, int>();
 
             return player;
         }

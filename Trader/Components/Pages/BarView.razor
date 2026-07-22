@@ -1,15 +1,74 @@
 @using EconomicGame
 @using EconomicGame.Configuration
+@using EconomicGame.Models
 @inject EconomicGame.Services.GameEngine GameEngine
 @inject EconomicGame.Services.CorporateActionService ActionService
 @inject EconomicGame.Services.PlayerService PlayerService
+@inject LocalizationService Loc
+@implements IDisposable
+
+<style>
+.btn-bronze {
+    background: linear-gradient(135deg, #cd7f32 0%, #8b5a2b 100%) !important;
+    color: white !important;
+    border: 1px solid #ff9f43 !important;
+    box-shadow: 0 0 8px rgba(205, 127, 50, 0.5) !important;
+    font-weight: bold !important;
+}
+.btn-silver {
+    background: linear-gradient(135deg, #a6b8c7 0%, #3e5060 100%) !important;
+    color: white !important;
+    border: 1px solid #ecf0f1 !important;
+    box-shadow: 0 0 8px rgba(189, 195, 199, 0.5) !important;
+    font-weight: bold !important;
+}
+.btn-gold {
+    background: linear-gradient(135deg, #f1c40f 0%, #f39c12 100%) !important;
+    color: black !important;
+    border: 1px solid #f39c12 !important;
+    box-shadow: 0 0 12px rgba(241, 196, 15, 0.6) !important;
+    font-weight: bold !important;
+}
+.playing-card.poker-held-card {
+    border: 3px solid #ffc107 !important;
+    box-shadow: 0 0 15px rgba(255, 193, 7, 0.8) !important;
+    transform: translateY(-8px);
+    transition: all 0.2s ease-in-out;
+}
+.poker-held-badge {
+    background: #ffc107;
+    color: black;
+    font-size: 0.7rem;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-weight: bold;
+    box-shadow: 0 0 5px rgba(255,193,7,0.5);
+    margin-top: 2px;
+}
+.poker-deck-status {
+    font-size: 0.85rem;
+    color: #a6b8c7;
+    margin-top: 5px;
+}
+</style>
 
 <div class="bar">
-    <h2>🍺 Бар "У Трейдера"</h2>
-    
+    <h2>@Loc["bar.title"]</h2>
+
+    @if (!GameEngine.IsBarOpen)
+    {
+        <div class="alert alert-dark border-warning">
+            🔒 @Loc["bar.closed_banner"] (@GameConstants.BarOpenHour:00 – 0@(GameConstants.BarCloseHour):00)
+        </div>
+    }
+    else
+    {
+        <div class="small text-muted mb-2">🕰️ @Loc["bar.time_dilation_hint"]</div>
+    }
+
     @if (Player == null)
     {
-        <p>Создайте персонажа для посещения бара.</p>
+        <p>@Loc["bar.create_character"]</p>
     }
     else
     {
@@ -18,12 +77,12 @@
             <div class="col-md-4">
                 <div class="card @GetStatusCardClass()">
                     <div class="card-header">
-                        <h5>Твоё состояние</h5>
+                        <h5>@Loc["bar.your_status"]</h5>
                     </div>
                     <div class="card-body">
-                        <p><strong>Деньги:</strong> @Player.Money.ToString("C")</p>
+                        <p><strong>@Loc["bar.money"]:</strong> @Player.Money.ToString("C")</p>
                         <p>
-                            <strong>Состояние:</strong> 
+                            <strong>@Loc["bar.state"]:</strong>
                             <span class="badge @GetIntoxicationBadgeClass()">
                                 @GameEngine.GetIntoxicationStatus(Player)
                             </span>
@@ -31,13 +90,13 @@
                         @if (Player.SoberUpTime.HasValue)
                         {
                             <p class="text-muted small">
-                                Протрезвеешь к: @Player.SoberUpTime.Value.ToShortTimeString()
+                                @Loc["bar.sober_up_at"]: @Player.SoberUpTime.Value.ToShortTimeString()
                             </p>
                         }
                         @if (Player.IntoxicationLevel >= 3)
                         {
                             <div class="alert alert-warning py-1 small">
-                                ⚠️ Осторожно! В пьяном виде шансы на выигрыш ниже!
+                                @Loc["bar.tipsy_warning"]
                             </div>
                         }
                     </div>
@@ -48,7 +107,7 @@
             <div class="col-md-8">
                 <div class="card">
                     <div class="card-header bg-warning text-dark">
-                        <h5>🍻 Меню напитков</h5>
+                        <h5>@Loc["bar.menu"]</h5>
                     </div>
                     <div class="card-body">
                         <div class="row">
@@ -56,11 +115,11 @@
                                 <div class="card text-center h-100">
                                     <div class="card-body">
                                         <h1>🍺</h1>
-                                        <h6>Пиво</h6>
+                                        <h6>@Loc["bar.beer"]</h6>
                                         <p class="text-muted">@GameConstants.BeerPrice.ToString("C")</p>
-                                        <button class="btn btn-outline-primary btn-sm" 
+                                        <button class="btn btn-outline-primary btn-sm"
                                                 @onclick='() => OrderDrink("beer")'>
-                                            Заказать
+                                            @Loc["bar.order"]
                                         </button>
                                     </div>
                                 </div>
@@ -69,11 +128,11 @@
                                 <div class="card text-center h-100">
                                     <div class="card-body">
                                         <h1>🥃</h1>
-                                        <h6>Виски</h6>
+                                        <h6>@Loc["bar.whiskey"]</h6>
                                         <p class="text-muted">@GameConstants.WhiskeyPrice.ToString("C")</p>
-                                        <button class="btn btn-outline-warning btn-sm" 
+                                        <button class="btn btn-outline-warning btn-sm"
                                                 @onclick='() => OrderDrink("whiskey")'>
-                                            Заказать
+                                            @Loc["bar.order"]
                                         </button>
                                     </div>
                                 </div>
@@ -82,11 +141,11 @@
                                 <div class="card text-center h-100">
                                     <div class="card-body">
                                         <h1>🍹</h1>
-                                        <h6>Коктейль</h6>
+                                        <h6>@Loc["bar.cocktail"]</h6>
                                         <p class="text-muted">@GameConstants.CocktailPrice.ToString("C")</p>
-                                        <button class="btn btn-outline-danger btn-sm" 
+                                        <button class="btn btn-outline-danger btn-sm"
                                                 @onclick='() => OrderDrink("cocktail")'>
-                                            Заказать
+                                            @Loc["bar.order"]
                                         </button>
                                     </div>
                                 </div>
@@ -110,31 +169,51 @@
             <div class="col-md-6">
                 <div class="card mb-3">
                     <div class="card-header bg-info text-white">
-                        <h5>👥 Общение</h5>
+                        <h5>@Loc["bar.socialize"]</h5>
                     </div>
                     <div class="card-body">
-                        <p>Поговори с посетителями — может найдёшь выгодную сделку!</p>
-                        <button class="btn btn-info" @onclick="TryMeetSomeone" 
+                        <p>@Loc["bar.mingle_hint"]</p>
+                        <button class="btn btn-info" @onclick="TryMeetSomeone"
                                 disabled="@(Player.IntoxicationLevel == 0)">
-                            Подойти к кому-нибудь
+                            @Loc["bar.approach"]
                         </button>
                         @if (Player.IntoxicationLevel == 0)
                         {
-                            <p class="text-muted small mt-2">Закажи выпить, чтобы раскрепоститься!</p>
+                            <p class="text-muted small mt-2">@Loc["bar.get_drink_first"]</p>
+                        }
+
+                        @* Localized encounter line (shown for sticky context beyond the top alert) *@
+                        @if (!string.IsNullOrEmpty(_encounterText) && !_hasActiveDeal)
+                        {
+                            <div class="alert alert-secondary mt-3">
+                                @_encounterText
+                            </div>
+                        }
+
+                        @* "Buy him a drink" follow-up action — only for the DrinkTogether encounter when no deal already on the table *@
+                        @if (_offersDrinkTogether && !_hasActiveDeal)
+                        {
+                            <div class="alert alert-warning mt-3">
+                                <p class="mb-2">@Loc["bar.buy_him_drink_hint"]</p>
+                                <button class="btn btn-warning btn-sm" @onclick="BuyDrinkForStranger"
+                                        disabled="@(Player.Money < EconomicGame.Configuration.GameConstants.StrangerDrinkPrice)">
+                                    @string.Format(Loc["bar.buy_him_drink"], EconomicGame.Configuration.GameConstants.StrangerDrinkPrice.ToString("C"))
+                                </button>
+                            </div>
                         }
 
                         @if (_hasActiveDeal)
                         {
                             <div class="alert alert-success mt-3">
-                                <strong>💰 Предложение!</strong><br/>
-                                @_dealDescription<br/>
-                                <strong>Итого:</strong> @((_dealPrice ?? 0) * (_dealQuantity ?? 0)):C
+                                <strong>@Loc["bar.offer"]</strong><br />
+                                @_dealDescription<br />
+                                <strong>@Loc["bar.total"]:</strong> @(((_dealPrice ?? 0) * (_dealQuantity ?? 0)).ToString("C"))
                                 <div class="mt-2">
                                     <button class="btn btn-success btn-sm" @onclick="AcceptDeal">
-                                        ✅ Принять
+                                        @Loc["bar.accept"]
                                     </button>
                                     <button class="btn btn-secondary btn-sm" @onclick="DeclineDeal">
-                                        ❌ Отказаться
+                                        @Loc["bar.decline"]
                                     </button>
                                 </div>
                             </div>
@@ -147,37 +226,44 @@
             <div class="col-md-6">
                 <div class="card mb-3 game-card" style="background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%); border: 2px solid #e94560;">
                     <div class="card-header text-white" style="background: linear-gradient(90deg, #e94560, #0f3460);">
-                        <h5 class="mb-0">🎰 Казино "Удача"</h5>
+                        <h5 class="mb-0">@Loc["bar.casino"]</h5>
                     </div>
                     <div class="card-body text-white">
                         <!-- Game tabs with neon style -->
                         <ul class="nav nav-pills mb-3 justify-content-center">
                             <li class="nav-item">
-                                <a class="nav-link @(_selectedGame == "slots" ? "active bg-danger" : "text-light")" 
+                                <a class="nav-link @(_selectedGame == "slots" ? "active bg-danger" : "text-light")"
                                    href="#" @onclick='() => SelectGame("slots")' @onclick:preventDefault
                                    style="@(_selectedGame != "slots" ? "border: 1px solid #e94560;" : "")">
-                                   🎰 Слоты
+                                    @Loc["bar.slots"]
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link @(_selectedGame == "dice" ? "active bg-warning text-dark" : "text-light")" 
+                                <a class="nav-link @(_selectedGame == "dice" ? "active bg-warning text-dark" : "text-light")"
                                    href="#" @onclick='() => SelectGame("dice")' @onclick:preventDefault
                                    style="@(_selectedGame != "dice" ? "border: 1px solid #ffc107;" : "")">
-                                   🎲 Кости
+                                    @Loc["bar.dice"]
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link @(_selectedGame == "blackjack" ? "active bg-dark" : "text-light")" 
+                                <a class="nav-link @(_selectedGame == "blackjack" ? "active bg-dark" : "text-light")"
                                    href="#" @onclick='() => SelectGame("blackjack")' @onclick:preventDefault
                                    style="@(_selectedGame != "blackjack" ? "border: 1px solid #6c757d;" : "")">
-                                   🃏 Блэкджек
+                                    @Loc["bar.blackjack"]
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link @(_selectedGame == "roulette" ? "active bg-success" : "text-light")" 
+                                <a class="nav-link @(_selectedGame == "roulette" ? "active bg-success" : "text-light")"
                                    href="#" @onclick='() => SelectGame("roulette")' @onclick:preventDefault
                                    style="@(_selectedGame != "roulette" ? "border: 1px solid #198754;" : "")">
-                                   🎡 Рулетка
+                                    @Loc["bar.roulette"]
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link @(_selectedGame == "poker" ? "active bg-primary" : "text-light")"
+                                   href="#" @onclick='() => SelectGame("poker")' @onclick:preventDefault
+                                   style="@(_selectedGame != "poker" ? "border: 1px solid #0d6efd;" : "")">
+                                    @Loc["bar.poker"]
                                 </a>
                             </li>
                         </ul>
@@ -186,12 +272,38 @@
                         <div class="game-display text-center p-3 mb-3 rounded" 
                              style="background: rgba(0,0,0,0.3); min-height: 120px; border: 1px solid rgba(255,255,255,0.1);">
                             
-                            @if (_isPlaying)
+                            @if (_isPlaying && _selectedGame != "poker")
                             {
                                 <div class="spinner-grow text-warning" role="status">
                                     <span class="visually-hidden">Playing...</span>
                                 </div>
-                                <p class="mt-2 text-warning">🎲 Играем...</p>
+                                <p class="mt-2 text-warning">@Loc["bar.playing"]</p>
+                            }
+                            else if (_selectedGame == "poker")
+                            {
+                                <div class="video-poker-table">
+                                    @if (_pokerHand.Any())
+                                    {
+                                        <div class="d-flex justify-content-center gap-2 mb-2 flex-wrap">
+                                            @for (int i = 0; i < _pokerHand.Count; i++)
+                                            {
+                                                var idx = i;
+                                                @RenderPokerCard(_pokerHand[i], idx)
+                                            }
+                                        </div>
+                                        @if (_pokerGameActive)
+                                        {
+                                            <div class="text-warning small mb-1">
+                                                @Loc["bar.poker_hold_hint"]
+                                            </div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <div style="font-size: 3rem; margin-bottom: 5px;">🃟 🂿 🃎 🃗 🃘</div>
+                                        <p class="text-muted">@Loc["bar.poker_subtitle"]</p>
+                                    }
+                                </div>
                             }
                             else if (_bjGameActive && _selectedGame == "blackjack")
                             {
@@ -199,7 +311,7 @@
                                 <div class="blackjack-table">
                                     <!-- Dealer's cards -->
                                     <div class="dealer-area mb-3">
-                                        <div class="text-muted small mb-1">Дилер @(GetCardTotal(_bjDealerCards, !_bjDealerCardHidden))</div>
+                                        <div class="text-muted small mb-1">@Loc["bar.dealer"] @(GetCardTotal(_bjDealerCards, !_bjDealerCardHidden))</div>
                                         <div class="d-flex justify-content-center gap-2">
                                             @for (int i = 0; i < _bjDealerCards.Count; i++)
                                             {
@@ -227,7 +339,7 @@
                                                 @RenderCard(card)
                                             }
                                         </div>
-                                        <div class="text-info">Твои карты: <strong class="h4">@GetPlayerTotal()</strong></div>
+                                        <div class="text-info">@Loc["bar.your_cards"]: <strong class="h4">@GetPlayerTotal()</strong></div>
                                     </div>
                                 </div>
                             }
@@ -255,7 +367,7 @@
                                             </div>
                                         }
                                     </div>
-                                    <div class="text-info">Сумма: <strong>@_diceValues.Sum()</strong></div>
+                                    <div class="text-info">@Loc["bar.sum"]: <strong>@_diceValues.Sum()</strong></div>
                                 </div>
                             }
                             else if (!string.IsNullOrEmpty(_lastGameResult))
@@ -284,7 +396,7 @@
                                                 </div>
                                             }
                                         </div>
-                                        <div class="text-info">Сумма: <strong>@_diceValues.Sum()</strong></div>
+                                        <div class="text-info">@Loc["bar.sum"]: <strong>@_diceValues.Sum()</strong></div>
                                     </div>
                                 }
                                 else if (_selectedGame == "dice" && _lastDice1 > 0)
@@ -293,7 +405,7 @@
                                         <span class="dice-face" style="font-size: 3rem; margin: 0 10px;">@GetDiceFace(_lastDice1)</span>
                                         <span class="dice-face" style="font-size: 3rem; margin: 0 10px;">@GetDiceFace(_lastDice2)</span>
                                     </div>
-                                    <p class="h4">Сумма: @(_lastDice1 + _lastDice2)</p>
+                                    <p class="h4">@Loc["bar.sum"]: @(_lastDice1 + _lastDice2)</p>
                                 }
                                 else if (_selectedGame == "blackjack" && (_bjGameActive || _lastPlayerCards > 0))
                                 {
@@ -301,7 +413,7 @@
                                     <div class="blackjack-table">
                                         <!-- Dealer's cards -->
                                         <div class="dealer-area mb-3">
-                                            <div class="text-muted small mb-1">Дилер @(GetCardTotal(_bjDealerCards, !_bjDealerCardHidden))</div>
+                                            <div class="text-muted small mb-1">@Loc["bar.dealer"] @(GetCardTotal(_bjDealerCards, !_bjDealerCardHidden))</div>
                                             <div class="d-flex justify-content-center gap-2">
                                                 @for (int i = 0; i < _bjDealerCards.Count; i++)
                                                 {
@@ -329,7 +441,7 @@
                                                     @RenderCard(card)
                                                 }
                                             </div>
-                                            <div class="text-info">Твои карты: <strong class="h4">@GetPlayerTotal()</strong></div>
+                                            <div class="text-info">@Loc["bar.your_cards"]: <strong class="h4">@GetPlayerTotal()</strong></div>
                                         </div>
                                     </div>
                                 }
@@ -356,22 +468,22 @@
                                 @if (_selectedGame == "slots")
                                 {
                                     <div style="font-size: 3rem;">🍒 🍋 🍇</div>
-                                    <p class="text-muted">Крути барабаны!</p>
+                                    <p class="text-muted">@Loc["bar.spin_reels"]</p>
                                 }
                                 else if (_selectedGame == "dice")
                                 {
                                     <div style="font-size: 3rem;">⚀ ⚁ ⚂ ⚃ ⚄ ⚅</div>
-                                    <p class="text-muted">Брось кубики!</p>
+                                    <p class="text-muted">@Loc["bar.roll_dice"]</p>
                                 }
                                 else if (_selectedGame == "blackjack")
                                 {
                                     <div style="font-size: 3rem;">🂡 🂫 🂭 🂮</div>
-                                    <p class="text-muted">Попробуй обыграть дилера!</p>
+                                    <p class="text-muted">@Loc["bar.beat_dealer"]</p>
                                 }
                                 else if (_selectedGame == "roulette")
                                 {
                                     <div style="font-size: 3rem;">🔴 ⚫ 🟢</div>
-                                    <p class="text-muted">Делайте ваши ставки!</p>
+                                    <p class="text-muted">@Loc["bar.place_bets"]</p>
                                 }
                             }
                         </div>
@@ -392,20 +504,74 @@
                             </div>
                         }
 
+                        <!-- Bet Tiers Selector Ribbon -->
+                        <div class="d-flex justify-content-center gap-1 mb-3 flex-wrap">
+                            <button class="btn btn-sm @(_activeBetTier == BetTier.Standard ? "btn-bronze" : "btn-outline-secondary text-light")" 
+                                    @onclick="() => SetBetTier(BetTier.Standard)" style="font-size: 0.8rem; transition: all 0.2s;" type="button">
+                                @Loc["bar.tier_bronze"] <span class="d-none d-sm-inline">($50-$500)</span>
+                            </button>
+                            
+                            @if (Player.Money >= 15000m)
+                            {
+                                <button class="btn btn-sm @(_activeBetTier == BetTier.HighRoller ? "btn-silver" : "btn-outline-secondary text-light")" 
+                                        @onclick="() => SetBetTier(BetTier.HighRoller)" style="font-size: 0.8rem; transition: all 0.2s;" type="button">
+                                    @Loc["bar.tier_silver"] <span class="d-none d-sm-inline">($1k-$10k)</span>
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-dark text-muted" disabled style="font-size: 0.8rem; border: 1px dashed #444;" type="button">
+                                    @string.Format(Loc["bar.tier_locked"], "$15k")
+                                </button>
+                            }
+
+                            @if (Player.Money >= 100000m)
+                            {
+                                <button class="btn btn-sm @(_activeBetTier == BetTier.VIP ? "btn-gold" : "btn-outline-secondary text-light")" 
+                                        @onclick="() => SetBetTier(BetTier.VIP)" style="font-size: 0.8rem; transition: all 0.2s;" type="button">
+                                    @Loc["bar.tier_gold"] <span class="d-none d-sm-inline">($10k-$25k)</span>
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-dark text-muted" disabled style="font-size: 0.8rem; border: 1px dashed #444;" type="button">
+                                    @string.Format(Loc["bar.tier_locked"], "$100k")
+                                </button>
+                            }
+                        </div>
+
                         <!-- Bet amount with styled input -->
                         <div class="mb-3">
                             <div class="input-group">
-                                <span class="input-group-text bg-dark text-warning border-warning">💰 Ставка</span>
+                                <span class="input-group-text bg-dark text-warning border-warning">@Loc["bar.bet"]</span>
                                 <input type="number" @bind="_betAmount" class="form-control bg-dark text-white border-warning text-center" 
-                                       min="@GameConstants.GamblingMinBet" 
-                                       max="@GameConstants.GamblingMaxBet" step="50" />
+                                       min="@GetMinBetLimit()" 
+                                       max="@GetMaxBetLimit()" 
+                                       step="@(_activeBetTier == BetTier.Standard ? 50 : (_activeBetTier == BetTier.HighRoller ? 500 : 5000))" />
                                 <span class="input-group-text bg-dark text-muted border-warning">$</span>
                             </div>
-                            <div class="d-flex justify-content-between mt-1">
-                                <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 50">$50</button>
-                                <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 100">$100</button>
-                                <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 250">$250</button>
-                                <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 500">$500</button>
+                            <div class="d-flex justify-content-between mt-1 flex-wrap gap-1">
+                                @if (_activeBetTier == BetTier.Standard)
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 50" type="button">$50</button>
+                                    <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 100" type="button">$100</button>
+                                    <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 250" type="button">$250</button>
+                                    <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 500" type="button">$500</button>
+                                }
+                                else if (_activeBetTier == BetTier.HighRoller)
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 1000" type="button">$1,000</button>
+                                    <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 2500" type="button">$2,500</button>
+                                    <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 5000" type="button">$5,000</button>
+                                    <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 10000" type="button">$10,000</button>
+                                }
+                                else if (_activeBetTier == BetTier.VIP)
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 10000" type="button">$10,000</button>
+                                    <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 15000" type="button">$15,000</button>
+                                    <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 20000" type="button">$20,000</button>
+                                    <button class="btn btn-sm btn-outline-secondary text-light" @onclick="() => _betAmount = 25000" type="button">$25,000</button>
+                                }
                             </div>
                         </div>
 
@@ -414,63 +580,49 @@
                         {
                             <button class="btn btn-lg btn-danger w-100 py-3" @onclick="PlaySlotsEnhanced" disabled="@_isPlaying"
                                     style="background: linear-gradient(180deg, #e94560, #c73659); border: none; box-shadow: 0 4px 15px rgba(233,69,96,0.4);">
-                                <span style="font-size: 1.5rem;">🎰</span> КРУТИТЬ! <span style="font-size: 1.5rem;">🎰</span>
+                                <span style="font-size: 1.5rem;">🎰</span> @Loc["bar.spin"] <span style="font-size: 1.5rem;">🎰</span>
                             </button>
                         }
                         else if (_selectedGame == "dice")
                         {
                             @if (!_diceGameActive)
                             {
-                                <!-- Start new dice game -->
-                                <button class="btn btn-lg btn-warning w-100 py-3" @onclick="StartDiceGame" disabled="@_isPlaying"
-                                        style="background: linear-gradient(180deg, #ffc107, #e0a800); border: none; box-shadow: 0 4px 15px rgba(255,193,7,0.4);">
-                                    <span style="font-size: 1.5rem;">🎲</span> БРОСИТЬ КОСТИ <span style="font-size: 1.5rem;">🎲</span>
-                                </button>
-                                
-                                <!-- Combination payouts -->
-                                <div class="mt-3 small text-muted">
-                                    <div class="row text-start">
-                                        <div class="col-6">Пара: x1</div>
-                                        <div class="col-6">Две пары: x2</div>
-                                        <div class="col-6">Тройка: x3</div>
-                                        <div class="col-6">Стрит: x4</div>
-                                        <div class="col-6">Фулл-хаус: x5</div>
-                                        <div class="col-6">Каре: x8</div>
-                                        <div class="col-6">Покер (5): x20</div>
-                                    </div>
+                                <!-- Contract model: declare your target BEFORE rolling -->
+                                <div class="mb-2 text-light small">@Loc["bar.dice_pick_target"]</div>
+                                <div class="row g-1 mb-3">
+                                    @foreach (var t in DiceTargets)
+                                    {
+                                        <div class="col-4">
+                                            <button class="btn btn-sm w-100 @(_diceTarget == t.Key ? "btn-success" : "btn-outline-light")"
+                                                    @onclick="() => _diceTarget = t.Key">
+                                                @Loc[t.LocKey]<br/><small class="text-warning">x@t.Multiplier → @((_betAmount * t.Multiplier).ToString("C0"))</small>
+                                            </button>
+                                        </div>
+                                    }
                                 </div>
+
+                                <button class="btn btn-lg btn-warning w-100 py-3" @onclick="StartDiceGame" disabled="@(_isPlaying || _diceTarget == null)"
+                                        style="background: linear-gradient(180deg, #ffc107, #e0a800); border: none; box-shadow: 0 4px 15px rgba(255,193,7,0.4);">
+                                    <span style="font-size: 1.5rem;">🎲</span> @Loc["bar.throw_dice"] <span style="font-size: 1.5rem;">🎲</span>
+                                </button>
                             }
                             else
                             {
                                 <!-- Active dice game -->
                                 <div class="text-info small mb-2">
-                                    🎲 Бросков осталось: <strong>@_diceRollsLeft</strong> | 💰 Ставка: @_diceCurrentBet.ToString("C")
+                                    🎯 @Loc["bar.dice_target"]: <strong>@Loc[CurrentDiceTarget!.LocKey]</strong> (x@CurrentDiceTarget!.Multiplier)
+                                    | 🎲 @Loc["bar.rolls_left"]: <strong>@_diceRollsLeft</strong> | @Loc["bar.bet"]: @_diceCurrentBet.ToString("C")
                                 </div>
-                                <p class="text-muted small">Нажми на кубик чтобы сохранить его</p>
-                                
-                                <button class="btn btn-warning w-100 mb-3" @onclick="RollDice" disabled="@(_isPlaying || _diceRollsLeft <= 0)"
+                                <p class="text-muted small">@Loc["bar.click_to_hold"]</p>
+
+                                <button class="btn btn-warning w-100 mb-2" @onclick="RollDice" disabled="@(_isPlaying || _diceRollsLeft <= 0)"
                                         style="box-shadow: 0 4px 10px rgba(255,193,7,0.3);">
-                                    🎲 БРОСИТЬ (@_diceRollsLeft осталось)
+                                    🎲 @Loc["bar.roll"] (@_diceRollsLeft @Loc["bar.left"])
                                 </button>
-                                
-                                <!-- Combination selector -->
-                                <div class="mb-2 text-light small">Выбери комбинацию для подсчёта:</div>
-                                <div class="row g-1 mb-2">
-                                    @foreach (var combo in GetAvailableCombinations())
-                                    {
-                                        <div class="col-4">
-                                            <button class="btn btn-sm w-100 @(_selectedCombination == combo.Key ? "btn-success" : "btn-outline-light")" 
-                                                    @onclick="() => _selectedCombination = combo.Key">
-                                                @combo.Key<br/><small class="text-warning">@combo.Value.ToString("C")</small>
-                                            </button>
-                                        </div>
-                                    }
-                                </div>
-                                
-                                <button class="btn btn-success w-100" @onclick="ScoreDice" 
-                                        disabled="@(string.IsNullOrEmpty(_selectedCombination))"
+
+                                <button class="btn btn-success w-100" @onclick="ResolveDice" disabled="@_isPlaying"
                                         style="box-shadow: 0 4px 10px rgba(40,167,69,0.3);">
-                                    💰 ЗАБРАТЬ ВЫИГРЫШ
+                                    @Loc["bar.take_winnings"] @(IsDiceTargetAchieved() ? "✅" : "⚠️")
                                 </button>
                             }
                         }
@@ -480,7 +632,7 @@
                             {
                                 <button class="btn btn-lg btn-dark w-100 py-3" @onclick="DealBlackjack" disabled="@_isPlaying"
                                         style="background: linear-gradient(180deg, #2d3436, #000000); border: 2px solid gold; box-shadow: 0 4px 15px rgba(255,215,0,0.3);">
-                                    <span style="font-size: 1.5rem;">🃏</span> РАЗДАТЬ КАРТЫ <span style="font-size: 1.5rem;">🃏</span>
+                                    <span style="font-size: 1.5rem;">🃏</span> @Loc["bar.deal_cards"] <span style="font-size: 1.5rem;">🃏</span>
                                 </button>
                             }
                             else
@@ -490,20 +642,20 @@
                                     <div class="col-6">
                                         <button class="btn btn-lg btn-success w-100 py-3" @onclick="BlackjackHit" disabled="@_isPlaying"
                                                 style="box-shadow: 0 4px 15px rgba(40,167,69,0.4);">
-                                            <span style="font-size: 1.5rem;">👆</span> ЕЩЁ
+                                            @Loc["bar.hit"]
                                             <div class="small">Hit</div>
                                         </button>
                                     </div>
                                     <div class="col-6">
                                         <button class="btn btn-lg btn-danger w-100 py-3" @onclick="BlackjackStand" disabled="@_isPlaying"
                                                 style="box-shadow: 0 4px 15px rgba(220,53,69,0.4);">
-                                            <span style="font-size: 1.5rem;">✋</span> ХВАТИТ
+                                            @Loc["bar.stand"]
                                             <div class="small">Stand</div>
                                         </button>
                                     </div>
                                 </div>
                                 <div class="mt-2 text-warning small">
-                                    💰 Ставка: @_bjCurrentBet.ToString("C")
+                                    @Loc["bar.bet"]: @_bjCurrentBet.ToString("C")
                                 </div>
                             }
                         }
@@ -513,30 +665,65 @@
                                 <div class="col-6">
                                     <button class="btn btn-lg btn-danger w-100 py-3" @onclick='() => PlayRouletteEnhanced("red")' disabled="@_isPlaying"
                                             style="box-shadow: 0 4px 15px rgba(220,53,69,0.4);">
-                                        🔴 КРАСНОЕ (x2)
+                                        @Loc["bar.red"]
                                     </button>
                                 </div>
                                 <div class="col-6">
                                     <button class="btn btn-lg btn-dark w-100 py-3" @onclick='() => PlayRouletteEnhanced("black")' disabled="@_isPlaying"
                                             style="box-shadow: 0 4px 15px rgba(0,0,0,0.4);">
-                                        ⚫ ЧЁРНОЕ (x2)
+                                        @Loc["bar.black"]
                                     </button>
                                 </div>
                             </div>
                             <div class="input-group">
-                                <input type="number" @bind="_rouletteNumber" class="form-control bg-dark text-white border-success text-center" 
+                                <input type="number" @bind="_rouletteNumber" class="form-control bg-dark text-white border-success text-center"
                                        min="0" max="36" placeholder="0-36" style="font-size: 1.2rem;" />
                                 <button class="btn btn-success px-4" @onclick='() => PlayRouletteEnhanced("number")' disabled="@_isPlaying"
                                         style="box-shadow: 0 4px 15px rgba(25,135,84,0.4);">
-                                    🎯 НОМЕР (x35)
+                                    @Loc["bar.number"]
                                 </button>
                             </div>
+                        }
+                        else if (_selectedGame == "poker")
+                        {
+                            @if (!_pokerGameActive)
+                            {
+                                <button class="btn btn-lg btn-primary w-100 py-3" @onclick="StartPokerGame" disabled="@_isPlaying"
+                                        style="background: linear-gradient(180deg, #0d6efd, #0b5ed7); border: none; box-shadow: 0 4px 15px rgba(13,110,253,0.4);">
+                                    <span style="font-size: 1.5rem;">🃏</span> @Loc["bar.poker_deal"] <span style="font-size: 1.5rem;">🃏</span>
+                                </button>
+                                
+                                <!-- Video Poker Payout Table -->
+                                <div class="mt-3 small text-muted">
+                                    <div class="row text-start text-light" style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.05); margin-left: 0; margin-right: 0;">
+                                        <div class="col-6 mb-1">👑 @Loc["bar.payout_royal"]</div>
+                                        <div class="col-6 mb-1">✨ @Loc["bar.payout_straight_flush"]</div>
+                                        <div class="col-6 mb-1">⭐ @Loc["bar.payout_four"]</div>
+                                        <div class="col-6 mb-1">🏠 @Loc["bar.payout_full_house"]</div>
+                                        <div class="col-6 mb-1">🌊 @Loc["bar.payout_flush"]</div>
+                                        <div class="col-6 mb-1">📏 @Loc["bar.payout_straight"]</div>
+                                        <div class="col-6 mb-1">☘️ @Loc["bar.payout_three"]</div>
+                                        <div class="col-6 mb-1">✌️ @Loc["bar.payout_two_pair"]</div>
+                                        <div class="col-6 mb-1">🃏 @Loc["bar.payout_jacks"]</div>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <button class="btn btn-lg btn-success w-100 py-3" @onclick="DrawPokerCards" disabled="@_isPlaying"
+                                        style="background: linear-gradient(180deg, #198754, #157347); border: none; box-shadow: 0 4px 15px rgba(25,135,84,0.4);">
+                                    @Loc["bar.poker_draw"]
+                                </button>
+                                <div class="mt-2 text-warning small">
+                                    @Loc["bar.bet"]: @_pokerCurrentBet.ToString("C")
+                                </div>
+                            }
                         }
 
                         @if (Player.IntoxicationLevel >= 2)
                         {
                             <div class="alert alert-warning py-1 mt-3 small">
-                                🍺 Опьянение снижает шансы! Уровень: @Player.IntoxicationLevel
+                                @Loc["bar.drunk_lowers"]: @Player.IntoxicationLevel
                             </div>
                         }
 
@@ -544,9 +731,9 @@
                         @if (_gamesPlayed > 0)
                         {
                             <div class="mt-3 pt-2 border-top border-secondary small text-muted">
-                                <span>Игр: @_gamesPlayed</span> |
-                                <span class="text-success">Выигрыши: @_wins</span> |
-                                <span class="text-danger">Проигрыши: @(_gamesPlayed - _wins)</span> |
+                                <span>@Loc["bar.games_played"]: @_gamesPlayed</span> |
+                                <span class="text-success">@Loc["bar.wins"]: @_wins</span> |
+                                <span class="text-danger">@Loc["bar.losses"]: @(_gamesPlayed - _wins)</span> |
                                 <span class="@(_totalProfit >= 0 ? "text-success" : "text-danger")">
                                     @(_totalProfit >= 0 ? "+" : "")@_totalProfit.ToString("C")
                                 </span>
@@ -562,7 +749,7 @@
         {
             <div class="card mt-3">
                 <div class="card-header bg-secondary text-white">
-                    <h5>👂 Услышанные слухи</h5>
+                    <h5>@Loc["bar.rumors_heard"]</h5>
                 </div>
                 <div class="card-body">
                     <ul class="list-group">
@@ -578,19 +765,19 @@
         <!-- Phase 7: Shadow Operations -->
         <div class="card mt-3" style="background: #0d0d0d; border: 1px solid #333;">
             <div class="card-header text-white" style="background: #1a1a1a;">
-                <h5 class="mb-0">🕵️‍♂️ Теневые операции</h5>
+                <h5 class="mb-0">@Loc["bar.shadow_ops"]</h5>
             </div>
             <div class="card-body text-light">
-                <p class="text-muted small">Здесь можно нанять людей для решения "особых" проблем с конкурентами.</p>
-                
+                <p class="text-muted small">@Loc["bar.shadow_desc"]</p>
+
                 @if (Player.RivalPlayerIds.Any())
                 {
                     <div class="table-responsive">
                         <table class="table table-dark table-hover table-sm">
                             <thead>
                                 <tr>
-                                    <th>Конкурент</th>
-                                    <th>Действия</th>
+                                    <th>@Loc["bar.rival"]</th>
+                                    <th>@Loc["bar.actions"]</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -604,28 +791,28 @@
                                                 <span class="text-danger fw-bold">@rival.Name</span>
                                                 @if (rival.IsSabotaged)
                                                 {
-                                                    <span class="badge bg-warning text-dark ms-1">Саботаж</span>
+                                                    <span class="badge bg-warning text-dark ms-1">@Loc["bar.sabotaged_badge"]</span>
                                                 }
                                                 @if (rival.OwnerId == Player.Id)
                                                 {
-                                                    <span class="badge bg-success ms-1">Твое подразделение</span>
+                                                    <span class="badge bg-success ms-1">@Loc["bar.your_division"]</span>
                                                 }
                                             </td>
                                             <td>
                                                 <div class="btn-group">
-                                                    <button class="btn btn-outline-info btn-sm" 
+                                                    <button class="btn btn-outline-info btn-sm"
                                                             @onclick="() => GetIntel(rival.Id)">
-                                                        👁️ Разведка ($5k)
+                                                        @Loc["bar.intel"]
                                                     </button>
-                                                    <button class="btn btn-outline-warning btn-sm" 
+                                                    <button class="btn btn-outline-warning btn-sm"
                                                             @onclick="() => Sabotage(rival.Id)"
                                                             disabled="@(rival.IsSabotaged || rival.OwnerId == Player.Id)">
-                                                        🧨 Саботаж (@ActionService.CalculateSabotageCost(rival).ToString("C0"))
+                                                        @Loc["bar.sabotage"] (@ActionService.CalculateSabotageCost(rival).ToString("C0"))
                                                     </button>
-                                                    <button class="btn btn-outline-danger btn-sm" 
+                                                    <button class="btn btn-outline-danger btn-sm"
                                                             @onclick="() => Takeover(rival.Id)"
                                                             disabled="@(rival.OwnerId != null)">
-                                                        🏢 Поглощение
+                                                        @Loc["bar.takeover"]
                                                     </button>
                                                 </div>
                                             </td>
@@ -638,7 +825,7 @@
                 }
                 else
                 {
-                    <p class="text-muted italic">Пока у тебя нет серьезных врагов на рынке...</p>
+                    <p class="text-muted italic">@Loc["bar.no_enemies"]</p>
                 }
             </div>
         </div>
@@ -649,12 +836,43 @@
     [Parameter]
     public Player? Player { get; set; }
 
+    protected override void OnInitialized()
+    {
+        Loc.OnLanguageChanged += Refresh;
+        // Time flows slower while you're hanging out at the bar
+        GameEngine.PlayerInBarZone = true;
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= Refresh;
+        GameEngine.PlayerInBarZone = false;
+    }
+
     private string _message = "";
     private string _messageClass = "alert-info";
     private decimal _betAmount = 100m;
     private List<string> _heardRumors = new();
     private string _selectedGame = "slots";
     private int _rouletteNumber = 0;
+
+    // Bet tiers and stakes state
+    public enum BetTier { Standard, HighRoller, VIP }
+    private BetTier _activeBetTier = BetTier.Standard;
+
+    // Video Poker state
+    public class PokerCard
+    {
+        public int Value { get; set; }
+        public string Suit { get; set; } = "";
+    }
+    private bool _pokerGameActive = false;
+    private List<PokerCard> _pokerHand = new();
+    private bool[] _pokerHeld = new bool[5];
+    private List<PokerCard> _pokerDeck = new();
+    private decimal _pokerCurrentBet = 0;
 
     // Enhanced game state
     private bool _isPlaying = false;
@@ -689,7 +907,6 @@
     private bool[] _diceHeld = new bool[5];
     private int _diceRollsLeft = 3;
     private decimal _diceCurrentBet = 0;
-    private string? _selectedCombination = null;
 
     // Red numbers for roulette
     private static readonly int[] RedNumbers = { 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36 };
@@ -704,6 +921,21 @@
     private string? _dealItem;
     private decimal? _dealPrice;
     private int? _dealQuantity;
+    private bool _isStolenDeal = false;
+
+    // Encounter state (the "who you met" narrative text and follow-up actions)
+    private string? _encounterText;
+    private bool _offersDrinkTogether;
+
+    // Maps service-side BarEncounterType -> localized flavor string.
+    private string LocalizeEncounter(BarEncounterType type) => type switch
+    {
+        BarEncounterType.DrinkTogether => Loc["bar.enc_drink_together"],
+        BarEncounterType.BarmanStories => Loc["bar.enc_barman_stories"],
+        BarEncounterType.FellowTrader  => Loc["bar.enc_fellow_trader"],
+        BarEncounterType.LoudCrowd     => Loc["bar.enc_loud_crowd"],
+        _ => ""
+    };
 
     private void OrderDrink(string drinkType)
     {
@@ -726,17 +958,93 @@
     {
         if (Player == null) return;
 
-        var (encounter, hasDeal, item, price, quantity) = GameEngine.TryMeetSomeone(Player);
-        _message = encounter;
-        _messageClass = hasDeal ? "alert-success" : "alert-secondary";
+        var (encounter, hasDeal, item, price, quantity, encType) = GameEngine.TryMeetSomeone(Player);
 
-        if (hasDeal)
+        // If sober, service returns a one-off rejection string with no encounter type — show it and bail.
+        if (encType == null)
+        {
+            _message = Loc["bar.sober_no_meet"];
+            _messageClass = "alert-secondary";
+            _encounterText = null;
+            _offersDrinkTogether = false;
+            StateHasChanged();
+            return;
+        }
+
+        // Localize the flavor line the player sees.
+        var localizedEncounter = LocalizeEncounter(encType.Value);
+        _encounterText = localizedEncounter;
+        _offersDrinkTogether = encType == BarEncounterType.DrinkTogether && !hasDeal;
+
+        if (hasDeal && item != null && price.HasValue && quantity.HasValue)
         {
             _hasActiveDeal = true;
-            _dealDescription = encounter;
+            // Build a localized deal description so the offer text isn't half-Russian.
+            _dealDescription = $"{localizedEncounter} " +
+                string.Format(Loc["bar.deal_offer_text"], quantity.Value, item, price.Value.ToString("C"));
             _dealItem = item;
             _dealPrice = price;
             _dealQuantity = quantity;
+            _message = _dealDescription;
+            _messageClass = "alert-success";
+        }
+        else
+        {
+            _message = localizedEncounter;
+            _messageClass = "alert-secondary";
+        }
+
+        StateHasChanged();
+    }
+
+    private void BuyDrinkForStranger()
+    {
+        if (Player == null) return;
+
+        var (result, rumorItem, hasDeal, item, price, quantity, scamType, isStolen) = GameEngine.BuyDrinkForStranger(Player);
+
+        // Clear the pending drink-together offer since we acted on it.
+        _offersDrinkTogether = false;
+        _encounterText = null;
+        _isStolenDeal = isStolen;
+
+        if (hasDeal && item != null && price.HasValue && quantity.HasValue)
+        {
+            _hasActiveDeal = true;
+            _dealDescription = _isStolenDeal
+                ? string.Format(Loc["bar.stolen_deal"], item, quantity.Value, price.Value.ToString("C"))
+                : string.Format(Loc["bar.stranger_deal"], quantity.Value, item, price.Value.ToString("C"));
+            _dealItem = item;
+            _dealPrice = price;
+            _dealQuantity = quantity;
+            _message = _dealDescription;
+            _messageClass = _isStolenDeal ? "alert-warning" : "alert-success";
+        }
+        else if (!string.IsNullOrEmpty(rumorItem))
+        {
+            // Log the rumor like OrderDrink does so it appears in "heard rumors" section.
+            _heardRumors.Insert(0, result);
+            if (_heardRumors.Count > 5) _heardRumors.RemoveAt(5);
+            _message = result;
+            _messageClass = "alert-info";
+        }
+        else if (scamType.HasValue)
+        {
+            // Coin flip came up scam — localize the flavor and show a sting message.
+            _message = scamType.Value switch
+            {
+                BarScamType.DrinkAndLeave  => Loc["bar.scam_drink_and_leave"],
+                BarScamType.BoringStory    => Loc["bar.scam_boring_story"],
+                BarScamType.BathroomExit   => Loc["bar.scam_bathroom_exit"],
+                _ => ""
+            };
+            _messageClass = "alert-warning";
+        }
+        else
+        {
+            // Insufficient funds or other edge case — show raw service message.
+            _message = result;
+            _messageClass = "alert-danger";
         }
 
         StateHasChanged();
@@ -746,16 +1054,40 @@
     {
         if (Player == null || !_hasActiveDeal || _dealItem == null) return;
 
-        var result = GameEngine.AcceptBarDeal(Player, _dealItem, _dealPrice ?? 0, _dealQuantity ?? 0);
-        _message = result;
-        _messageClass = result.Contains("Сделка") ? "alert-success" : "alert-danger";
+        var (result, success, isPoliceRaid, bountyGiven, bountyAmount) = GameEngine.AcceptBarDeal(Player, _dealItem, _dealPrice ?? 0, _dealQuantity ?? 0, _isStolenDeal);
+        if (success)
+        {
+            if (isPoliceRaid)
+            {
+                if (bountyGiven)
+                {
+                    _message = string.Format(Loc["bar.police_raid_bounty"], _dealItem, bountyAmount.ToString("C"));
+                    _messageClass = "alert-warning";
+                }
+                else
+                {
+                    _message = string.Format(Loc["bar.police_raid_no_bounty"], _dealItem);
+                    _messageClass = "alert-danger";
+                }
+            }
+            else
+            {
+                _message = result;
+                _messageClass = "alert-success";
+            }
+        }
+        else
+        {
+            _message = result;
+            _messageClass = "alert-danger";
+        }
         ClearDeal();
         StateHasChanged();
     }
 
     private void DeclineDeal()
     {
-        _message = "Ты отказался от сделки.";
+        _message = Loc["bar.deal_declined"];
         _messageClass = "alert-secondary";
         ClearDeal();
         StateHasChanged();
@@ -768,6 +1100,9 @@
         _dealItem = null;
         _dealPrice = null;
         _dealQuantity = null;
+        _encounterText = null;
+        _offersDrinkTogether = false;
+        _isStolenDeal = false;
     }
 
     private void PlayGambling()
@@ -783,6 +1118,15 @@
     private void PlayDice(string betType)
     {
         if (Player == null) return;
+
+        if (Player.Money > 5000000m && _betAmount > 500m)
+        {
+            _betAmount = 500m;
+            _message = Loc.CurrentLanguage == EconomicGame.Services.Language.Ru 
+                ? "Лимит превышен! При капитале более $5M максимальная ставка в кубиках ограничена до $500." 
+                : "Limit exceeded! With capital over $5M, the maximum bet in Dice is limited to $500.";
+            _messageClass = "alert-warning";
+        }
 
         var result = GameEngine.PlayDice(Player, _betAmount, betType);
         _message = result;
@@ -833,27 +1177,115 @@
     {
         if (Player == null || _isPlaying) return;
 
+        if (_betAmount > Player.Money)
+        {
+            _lastGameResult = Loc["bar.insufficient_bet"];
+            _lastWin = false;
+            StateHasChanged();
+            return;
+        }
+
+        if (_betAmount < GetMinBetLimit() || _betAmount > GetMaxBetLimit())
+        {
+            _lastGameResult = "Неверная ставка для выбранного тира.";
+            _lastWin = false;
+            StateHasChanged();
+            return;
+        }
+
+        var slotsBetError = GameEngine.ValidateBet(Player, _betAmount);
+        if (slotsBetError != null)
+        {
+            _lastGameResult = slotsBetError;
+            _lastWin = false;
+            StateHasChanged();
+            return;
+        }
+
         _isPlaying = true;
         ClearGameState();
         StateHasChanged();
 
         // Animate slot reels
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 12; i++)
         {
             _slotSymbol1 = SlotSymbols[_rand.Next(SlotSymbols.Length)];
             _slotSymbol2 = SlotSymbols[_rand.Next(SlotSymbols.Length)];
             _slotSymbol3 = SlotSymbols[_rand.Next(SlotSymbols.Length)];
             StateHasChanged();
-            await Task.Delay(100);
+            await Task.Delay(80 + i * 10);
         }
 
-        var result = GameEngine.PlayGambling(Player, _betAmount);
-        _lastWin = result.Contains("Победа");
-        _lastGameResult = result;
+        // Determine outcome
+        string sym1 = SlotSymbols[_rand.Next(SlotSymbols.Length)];
+        string sym2 = SlotSymbols[_rand.Next(SlotSymbols.Length)];
+        string sym3 = SlotSymbols[_rand.Next(SlotSymbols.Length)];
+
+        // Tweak for drunk state nudge
+        bool drunkSlip = false;
+        if (Player.IntoxicationLevel >= 2)
+        {
+            double slipChance = Player.IntoxicationLevel == 2 ? 0.15 : 0.30;
+            if (_rand.NextDouble() < slipChance && (sym1 == sym2 || sym2 == sym3 || sym1 == sym3))
+            {
+                // Unmatch the match
+                sym3 = SlotSymbols.First(s => s != sym1 && s != sym2);
+                drunkSlip = true;
+            }
+        }
+
+        _slotSymbol1 = sym1;
+        _slotSymbol2 = sym2;
+        _slotSymbol3 = sym3;
+
+        decimal multiplier = 0;
+        string combinationName = "";
+
+        if (sym1 == sym2 && sym2 == sym3)
+        {
+            // 3 of a kind
+            if (sym1 == "7️⃣") { multiplier = 25m; combinationName = "🔥 MEGA JACKPOT 777"; }
+            else if (sym1 == "💎") { multiplier = 15m; combinationName = "💎 DIAMOND JACKPOT"; }
+            else { multiplier = 10m; combinationName = $"🎉 TRIPLE {sym1}"; }
+        }
+        else if (sym1 == sym2 || sym2 == sym3 || sym1 == sym3)
+        {
+            // 2 of a kind
+            multiplier = 2m;
+            combinationName = "🍒 PAIR";
+        }
+
         _gamesPlayed++;
-        if (_lastWin) { _wins++; _totalProfit += _betAmount; }
-        else _totalProfit -= _betAmount;
-        
+        if (multiplier > 0)
+        {
+            _lastWin = true;
+            decimal netProfit = (multiplier - 1) * _betAmount;
+            var (paidSlots, noteSlots) = GameEngine.SettleGambling(Player, netProfit);
+            _totalProfit += paidSlots;
+            _wins++;
+
+            _lastGameResult = $"🎉 {combinationName}! Выигрыш: {(_betAmount + paidSlots).ToString("C")}!" + (noteSlots != null ? $" ({noteSlots})" : "");
+        }
+        else
+        {
+            _lastWin = false;
+            GameEngine.SettleGambling(Player, -_betAmount);
+            _totalProfit -= _betAmount;
+            _lastGameResult = "😢 Нет совпадений. Ставка проиграна.";
+        }
+
+        if (drunkSlip)
+        {
+            _message = "🥴 Из-за пьяных рук ты случайно задел рычаг автомата и сбил выигрышную комбинацию!";
+            _messageClass = "alert-warning";
+        }
+        else
+        {
+            _message = "";
+        }
+
+        GameEngine.LogActivity($"{Player.Name} сыграл в слоты на ставку {_betAmount:C}. Результат: {_lastGameResult}");
+
         _isPlaying = false;
         StateHasChanged();
     }
@@ -915,14 +1347,60 @@
         StateHasChanged();
     }
 
-    // Interactive Yahtzee Dice Methods
+    // Interactive Dice: CONTRACT model — declare a target combination before rolling,
+    // get paid only if you actually assemble it within 3 rolls.
+    // (The old "pick any combination you happened to roll" version was +250% EV for the player.)
+    public record DiceTarget(string Key, string LocKey, decimal Multiplier);
+
+    private static readonly DiceTarget[] DiceTargets =
+    {
+        new("two_pairs",  "bar.combo_two_pair",   1.3m),
+        new("trips",      "bar.combo_three",      1.25m),
+        new("full_house", "bar.combo_full_house", 2.6m),
+        new("four",       "bar.combo_four",       3.2m),
+        new("straight",   "bar.combo_straight",   5m),
+        new("yahtzee",    "bar.combo_poker",      20m),
+    };
+
+    private string? _diceTarget = null;
+    private DiceTarget? CurrentDiceTarget => DiceTargets.FirstOrDefault(t => t.Key == _diceTarget);
+
+    private bool IsDiceTargetAchieved()
+    {
+        var values = _diceValues.Where(v => v > 0).ToArray();
+        if (values.Length < 5 || _diceTarget == null) return false;
+
+        var groups = values.GroupBy(v => v).OrderByDescending(g => g.Count()).ToList();
+        var sorted = values.OrderBy(v => v).ToArray();
+
+        return _diceTarget switch
+        {
+            "two_pairs" => groups.Count(g => g.Count() >= 2) >= 2,
+            "trips" => groups.Any(g => g.Count() >= 3),
+            "full_house" => groups.Any(g => g.Count() >= 3) && groups.Count(g => g.Count() >= 2) >= 2,
+            "four" => groups.Any(g => g.Count() >= 4),
+            "straight" => sorted.SequenceEqual(new[] {1,2,3,4,5}) || sorted.SequenceEqual(new[] {2,3,4,5,6}),
+            "yahtzee" => groups.Any(g => g.Count() == 5),
+            _ => false
+        };
+    }
+
     private async Task StartDiceGame()
     {
-        if (Player == null || _isPlaying || _diceGameActive) return;
+        if (Player == null || _isPlaying || _diceGameActive || _diceTarget == null) return;
 
         if (_betAmount > Player.Money)
         {
-            _lastGameResult = "💸 Недостаточно денег для ставки!";
+            _lastGameResult = Loc["bar.insufficient_bet"];
+            _lastWin = false;
+            StateHasChanged();
+            return;
+        }
+
+        var diceBetError = GameEngine.ValidateBet(Player, _betAmount);
+        if (diceBetError != null)
+        {
+            _lastGameResult = diceBetError;
             _lastWin = false;
             StateHasChanged();
             return;
@@ -932,10 +1410,40 @@
         _diceCurrentBet = _betAmount;
         _diceRollsLeft = 3;
         _diceHeld = new bool[5];
-        _selectedCombination = null;
         ClearGameState();
 
         await RollDice();
+    }
+
+    private void ResolveDice()
+    {
+        if (Player == null || !_diceGameActive || _isPlaying) return;
+        var target = CurrentDiceTarget;
+        if (target == null) return;
+
+        if (IsDiceTargetAchieved())
+        {
+            decimal gross = _diceCurrentBet * target.Multiplier;
+            var netResult = gross - _diceCurrentBet;
+            var (paidDice, noteDice) = GameEngine.SettleGambling(Player, netResult);
+            _lastWin = true;
+            _wins++;
+            _totalProfit += paidDice;
+            _lastGameResult = string.Format(Loc["bar.dice_score_win"], Loc[target.LocKey], gross.ToString("C"))
+                + (noteDice != null ? $" ({noteDice})" : "");
+        }
+        else
+        {
+            _lastWin = false;
+            GameEngine.SettleGambling(Player, -_diceCurrentBet);
+            _totalProfit -= _diceCurrentBet;
+            _lastGameResult = string.Format(Loc["bar.dice_score_lose"], Loc[target.LocKey]);
+        }
+
+        _gamesPlayed++;
+        _diceGameActive = false;
+        _diceTarget = null;
+        StateHasChanged();
     }
 
     private async Task RollDice()
@@ -961,6 +1469,13 @@
 
         _diceRollsLeft--;
         _isPlaying = false;
+
+        // Out of rolls — the contract resolves automatically
+        if (_diceRollsLeft <= 0)
+        {
+            ResolveDice();
+            return;
+        }
         StateHasChanged();
     }
 
@@ -971,77 +1486,6 @@
         StateHasChanged();
     }
 
-    private Dictionary<string, decimal> GetAvailableCombinations()
-    {
-        var combos = new Dictionary<string, decimal>();
-        var values = _diceValues.Where(v => v > 0).ToArray();
-        if (values.Length < 5) return combos;
-
-        var groups = values.GroupBy(v => v).OrderByDescending(g => g.Count()).ToList();
-        var sorted = values.OrderBy(v => v).ToArray();
-
-        // Check each combination
-        // Pair
-        if (groups.Any(g => g.Count() >= 2))
-            combos["Пара"] = _diceCurrentBet * 1;
-
-        // Two Pairs
-        if (groups.Count(g => g.Count() >= 2) >= 2)
-            combos["2 Пары"] = _diceCurrentBet * 2;
-
-        // Three of a kind
-        if (groups.Any(g => g.Count() >= 3))
-            combos["Тройка"] = _diceCurrentBet * 3;
-
-        // Small Straight (1-2-3-4-5) or (2-3-4-5-6)
-        if ((sorted.SequenceEqual(new[] {1,2,3,4,5})) || (sorted.SequenceEqual(new[] {2,3,4,5,6})))
-            combos["Стрит"] = _diceCurrentBet * 4;
-
-        // Full House (3 + 2)
-        if (groups.Count == 2 && groups[0].Count() == 3)
-            combos["Фулл-хаус"] = _diceCurrentBet * 5;
-
-        // Four of a kind
-        if (groups.Any(g => g.Count() >= 4))
-            combos["Каре"] = _diceCurrentBet * 8;
-
-        // Yahtzee (5 of a kind)
-        if (groups.Any(g => g.Count() == 5))
-            combos["ПОКЕР!"] = _diceCurrentBet * 20;
-
-        // Always allow sum scoring
-        combos["Сумма"] = values.Sum() * (_diceCurrentBet / 21m); // Proportional payout
-
-        return combos;
-    }
-
-    private void ScoreDice()
-    {
-        if (Player == null || !_diceGameActive || string.IsNullOrEmpty(_selectedCombination)) return;
-
-        var combos = GetAvailableCombinations();
-        
-        if (combos.TryGetValue(_selectedCombination, out var winnings))
-        {
-            _lastWin = true;
-            _lastGameResult = $"🎲 {_selectedCombination}! Выигрыш: {winnings:C}!";
-            Player.Money += winnings;
-            _totalProfit += winnings;
-            _wins++;
-        }
-        else
-        {
-            _lastWin = false;
-            _lastGameResult = $"😢 {_selectedCombination} не найдено. Ставка потеряна.";
-            Player.Money -= _diceCurrentBet;
-            _totalProfit -= _diceCurrentBet;
-        }
-
-        _gamesPlayed++;
-        _diceGameActive = false;
-        _selectedCombination = null;
-        StateHasChanged();
-    }
 
     // Interactive Blackjack Methods
     private int DrawCard()
@@ -1122,7 +1566,16 @@
         // Validate bet
         if (_betAmount > Player.Money)
         {
-            _lastGameResult = "💸 Недостаточно денег для ставки!";
+            _lastGameResult = Loc["bar.insufficient_bet"];
+            _lastWin = false;
+            StateHasChanged();
+            return;
+        }
+
+        var bjBetError = GameEngine.ValidateBet(Player, _betAmount);
+        if (bjBetError != null)
+        {
+            _lastGameResult = bjBetError;
             _lastWin = false;
             StateHasChanged();
             return;
@@ -1184,7 +1637,7 @@
         if (playerTotal > 21)
         {
             // Bust!
-            await EndBlackjackGame(false, "💥 Перебор! Ты проиграл.");
+            await EndBlackjackGame(false, Loc["bar.bust"]);
         }
         else if (playerTotal == 21)
         {
@@ -1223,22 +1676,22 @@
         if (dealerTotal > 21)
         {
             won = true;
-            message = $"🎉 Дилер перебрал! Ты выиграл {_bjCurrentBet:C}!";
+            message = string.Format(Loc["bar.dealer_bust"], _bjCurrentBet.ToString("C"));
         }
         else if (playerTotal > dealerTotal)
         {
             won = true;
-            message = $"🎉 {playerTotal} > {dealerTotal}! Ты выиграл {_bjCurrentBet:C}!";
+            message = string.Format(Loc["bar.you_won"], playerTotal, dealerTotal, _bjCurrentBet.ToString("C"));
         }
         else if (playerTotal < dealerTotal)
         {
             won = false;
-            message = $"😢 {playerTotal} < {dealerTotal}. Ты проиграл {_bjCurrentBet:C}.";
+            message = string.Format(Loc["bar.you_lost"], playerTotal, dealerTotal, _bjCurrentBet.ToString("C"));
         }
         else
         {
             // Push - return bet
-            _lastGameResult = $"🤝 Ничья! {playerTotal} = {dealerTotal}. Ставка возвращена.";
+            _lastGameResult = string.Format(Loc["bar.push"], playerTotal, dealerTotal);
             _lastWin = false;
             _lastPlayerCards = playerTotal;
             _lastDealerCards = dealerTotal;
@@ -1265,12 +1718,13 @@
         if (won)
         {
             _wins++;
-            Player!.Money += _bjCurrentBet;
-            _totalProfit += _bjCurrentBet;
+            var (paidBj, noteBj) = GameEngine.SettleGambling(Player!, _bjCurrentBet);
+            _totalProfit += paidBj;
+            if (noteBj != null) _lastGameResult += $" ({noteBj})";
         }
         else
         {
-            Player!.Money -= _bjCurrentBet;
+            GameEngine.SettleGambling(Player!, -_bjCurrentBet);
             _totalProfit -= _bjCurrentBet;
         }
 
@@ -1360,4 +1814,327 @@
             _ => "bg-danger"
         };
     }
+
+    // Stakes Tiers and Video Poker Methods
+    private decimal GetMinBetLimit()
+    {
+        return _activeBetTier switch
+        {
+            BetTier.Standard => 50m,
+            BetTier.HighRoller => 1000m,
+            BetTier.VIP => 10000m,
+            _ => 50m
+        };
+    }
+
+    private decimal GetMaxBetLimit()
+    {
+        var tierMax = _activeBetTier switch
+        {
+            BetTier.Standard => 500m,
+            BetTier.HighRoller => 10000m,
+            BetTier.VIP => EconomicGame.Configuration.GameConstants.GamblingMaxBet,
+            _ => 500m
+        };
+        // The engine additionally caps bets at 10% of net worth
+        return Player == null ? tierMax : Math.Min(tierMax, GameEngine.GetMaxBet(Player));
+    }
+
+    private void SetBetTier(BetTier tier)
+    {
+        if (Player == null) return;
+        
+        if (tier == BetTier.HighRoller && Player.Money < 15000m) return;
+        if (tier == BetTier.VIP && Player.Money < 100000m) return;
+
+        _activeBetTier = tier;
+        _betAmount = GetMinBetLimit();
+        StateHasChanged();
+    }
+
+    private void TogglePokerHold(int index)
+    {
+        if (!_pokerGameActive) return;
+        if (index < 0 || index >= _pokerHeld.Length) return;
+        _pokerHeld[index] = !_pokerHeld[index];
+        StateHasChanged();
+    }
+
+    private void InitPokerDeck()
+    {
+        _pokerDeck.Clear();
+        foreach (var suit in CardSuits)
+        {
+            for (int val = 1; val <= 13; val++)
+            {
+                _pokerDeck.Add(new PokerCard { Value = val, Suit = suit });
+            }
+        }
+        
+        int n = _pokerDeck.Count;
+        while (n > 1)
+        {
+            n--;
+            int k = _rand.Next(n + 1);
+            var value = _pokerDeck[k];
+            _pokerDeck[k] = _pokerDeck[n];
+            _pokerDeck[n] = value;
+        }
+    }
+
+    private async Task StartPokerGame()
+    {
+        if (Player == null || _isPlaying || _pokerGameActive) return;
+
+        if (_betAmount > Player.Money)
+        {
+            _lastGameResult = Loc["bar.insufficient_bet"];
+            _lastWin = false;
+            StateHasChanged();
+            return;
+        }
+
+        if (_betAmount < GetMinBetLimit() || _betAmount > GetMaxBetLimit())
+        {
+            _lastGameResult = "Неверная ставка для выбранного тира.";
+            _lastWin = false;
+            StateHasChanged();
+            return;
+        }
+
+        var pokerBetError = GameEngine.ValidateBet(Player, _betAmount);
+        if (pokerBetError != null)
+        {
+            _lastGameResult = pokerBetError;
+            _lastWin = false;
+            StateHasChanged();
+            return;
+        }
+
+        _isPlaying = true;
+        ClearGameState();
+        InitPokerDeck();
+        _pokerHand.Clear();
+        _pokerHeld = new bool[5];
+        _pokerCurrentBet = _betAmount;
+        
+        StateHasChanged();
+        
+        for (int i = 0; i < 5; i++)
+        {
+            await Task.Delay(150);
+            _pokerHand.Add(_pokerDeck[0]);
+            _pokerDeck.RemoveAt(0);
+            StateHasChanged();
+        }
+        
+        _pokerGameActive = true;
+        _isPlaying = false;
+        StateHasChanged();
+    }
+
+    private async Task DrawPokerCards()
+    {
+        if (Player == null || !_pokerGameActive || _isPlaying) return;
+
+        _isPlaying = true;
+        
+        string slipMessage = "";
+        if (Player.IntoxicationLevel >= 2)
+        {
+            double slipChance = Player.IntoxicationLevel == 2 ? 0.15 : 0.30;
+            List<string> slips = new();
+            for (int i = 0; i < 5; i++)
+            {
+                if (_pokerHeld[i] && _rand.NextDouble() < slipChance)
+                {
+                    _pokerHeld[i] = false;
+                    slips.Add(string.Format(Loc["bar.poker_drunk_slip"], i + 1));
+                }
+            }
+            if (slips.Any())
+            {
+                slipMessage = string.Join(" ", slips);
+            }
+        }
+
+        StateHasChanged();
+        await Task.Delay(300);
+
+        for (int i = 0; i < 5; i++)
+        {
+            if (!_pokerHeld[i])
+            {
+                _pokerHand[i] = _pokerDeck[0];
+                _pokerDeck.RemoveAt(0);
+                StateHasChanged();
+                await Task.Delay(150);
+            }
+        }
+
+        var combinationName = EvaluatePokerHand(_pokerHand, out decimal multiplier);
+        
+        _gamesPlayed++;
+        if (multiplier > 0)
+        {
+            _lastWin = true;
+            decimal netProfit = (multiplier - 1) * _pokerCurrentBet;
+            var (paidPoker, notePoker) = GameEngine.SettleGambling(Player, netProfit);
+            _totalProfit += paidPoker;
+            _wins++;
+
+            _lastGameResult = string.Format(Loc["bar.poker_win"], combinationName, (_pokerCurrentBet + paidPoker).ToString("C"))
+                + (notePoker != null ? $" ({notePoker})" : "");
+        }
+        else
+        {
+            _lastWin = false;
+            GameEngine.SettleGambling(Player, -_pokerCurrentBet);
+            _totalProfit -= _pokerCurrentBet;
+            _lastGameResult = Loc["bar.poker_lose"];
+        }
+
+        if (!string.IsNullOrEmpty(slipMessage))
+        {
+            _message = slipMessage;
+            _messageClass = "alert-warning";
+        }
+        else
+        {
+            _message = "";
+        }
+
+        _pokerGameActive = false;
+        _isPlaying = false;
+        StateHasChanged();
+    }
+
+    private string EvaluatePokerHand(List<PokerCard> hand, out decimal multiplier)
+    {
+        multiplier = 0;
+        if (hand == null || hand.Count != 5) return "Invalid Hand";
+
+        var ranks = hand.Select(c => c.Value == 1 ? 14 : c.Value).OrderBy(r => r).ToList();
+        var suits = hand.Select(c => c.Suit).ToList();
+
+        bool isFlush = suits.Distinct().Count() == 1;
+
+        bool isStraight = false;
+        if (ranks.Distinct().Count() == 5 && (ranks[4] - ranks[0] == 4))
+        {
+            isStraight = true;
+        }
+        else if (ranks.SequenceEqual(new List<int> { 2, 3, 4, 5, 14 }))
+        {
+            isStraight = true;
+        }
+
+        var rankGroups = ranks.GroupBy(r => r)
+                             .Select(g => new { Rank = g.Key, Count = g.Count() })
+                             .OrderByDescending(g => g.Count)
+                             .ToList();
+
+        if (isFlush && isStraight && ranks.SequenceEqual(new List<int> { 10, 11, 12, 13, 14 }))
+        {
+            multiplier = 250m;
+            return Loc["bar.payout_royal"];
+        }
+
+        if (isFlush && isStraight)
+        {
+            multiplier = 50m;
+            return Loc["bar.payout_straight_flush"];
+        }
+
+        if (rankGroups[0].Count == 4)
+        {
+            multiplier = 25m;
+            return Loc["bar.payout_four"];
+        }
+
+        if (rankGroups[0].Count == 3 && rankGroups[1].Count == 2)
+        {
+            multiplier = 9m;
+            return Loc["bar.payout_full_house"];
+        }
+
+        if (isFlush)
+        {
+            multiplier = 6m;
+            return Loc["bar.payout_flush"];
+        }
+
+        if (isStraight)
+        {
+            multiplier = 4m;
+            return Loc["bar.payout_straight"];
+        }
+
+        if (rankGroups[0].Count == 3)
+        {
+            multiplier = 3m;
+            return Loc["bar.payout_three"];
+        }
+
+        if (rankGroups[0].Count == 2 && rankGroups[1].Count == 2)
+        {
+            multiplier = 2m;
+            return Loc["bar.payout_two_pair"];
+        }
+
+        if (rankGroups[0].Count == 2 && rankGroups[0].Rank >= 11)
+        {
+            multiplier = 1m;
+            return Loc["bar.payout_jacks"];
+        }
+
+        return "No Combination";
+    }
+
+    private RenderFragment RenderPokerCard(PokerCard card, int index) => builder =>
+    {
+        var suit = card.Suit;
+        var value = card.Value <= 13 && card.Value >= 1 ? CardValues[card.Value - 1] : "?";
+        var isRed = suit == "♥" || suit == "♦";
+        var isHeld = _pokerHeld[index];
+        var cardClass = "playing-card" + (isHeld ? " poker-held-card" : "");
+        
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "d-flex flex-column align-items-center");
+        builder.AddAttribute(2, "style", "cursor: pointer; margin: 5px;");
+        builder.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, () => TogglePokerHold(index)));
+
+        builder.OpenElement(4, "div");
+        builder.AddAttribute(5, "class", cardClass);
+        builder.AddAttribute(6, "style", $"width: 60px; height: 90px; background: white; border-radius: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: {(isRed ? "red" : "black")}; font-weight: bold; border: 1px solid #ccc; position: relative;");
+
+        builder.OpenElement(7, "div");
+        builder.AddAttribute(8, "style", "font-size: 1.4rem; line-height: 1.1;");
+        builder.AddContent(9, value);
+        builder.CloseElement();
+
+        builder.OpenElement(10, "div");
+        builder.AddAttribute(11, "style", "font-size: 1.2rem;");
+        builder.AddContent(12, suit);
+        builder.CloseElement();
+
+        builder.CloseElement();
+
+        if (isHeld)
+        {
+            builder.OpenElement(13, "span");
+            builder.AddAttribute(14, "class", "poker-held-badge");
+            builder.AddContent(15, Loc["bar.poker_hold"]);
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(16, "span");
+            builder.AddAttribute(17, "style", "font-size: 0.7rem; visibility: hidden;");
+            builder.AddContent(18, "HOLD");
+            builder.CloseElement();
+        }
+
+        builder.CloseElement();
+    };
 }

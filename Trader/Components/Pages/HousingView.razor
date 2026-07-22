@@ -1,49 +1,77 @@
 @using EconomicGame
 @using EconomicGame.Configuration
 @inject EconomicGame.Services.GameEngine GameEngine
+@inject LocalizationService Loc
+@implements IDisposable
 
 <div class="housing">
-    <h2>🏠 Недвижимость</h2>
-    
+    <h2>@Loc["house.title"]</h2>
+
     @if (Player == null)
     {
-        <p>Создайте персонажа для покупки недвижимости.</p>
+        <p>@Loc["house.create_character"]</p>
     }
     else
     {
         <div class="row mb-4">
             <!-- Current housing status -->
-            <div class="col-md-6">
-                <div class="card @(Player.Property == null ? "border-warning" : "border-success")">
-                    <div class="card-header @(Player.Property == null ? "bg-warning text-dark" : "bg-success text-white")">
-                        <h5>Твоё жильё</h5>
+            <div class="col-md-8">
+                <div class="card @(!Player.Properties.Any() ? "border-warning" : "border-success") shadow-sm">
+                    <div class="card-header @(!Player.Properties.Any() ? "bg-warning text-dark" : "bg-success text-white")">
+                        <h5 class="mb-0">🏡 @Loc["house.your_homes"]</h5>
                     </div>
                     <div class="card-body">
-                        @if (Player.Property == null)
+                        @if (!Player.Properties.Any())
                         {
-                            <div class="text-center">
+                            <div class="text-center py-3">
                                 <h1>🚗</h1>
-                                <h4>Бездомный</h4>
-                                <p class="text-muted">Ты спишь в машине. Это опасно для здоровья!</p>
+                                <h4>@Loc["house.homeless"]</h4>
+                                <p class="text-muted">@Loc["house.sleep_in_car"]</p>
                                 <div class="alert alert-warning">
-                                    ⚠️ Без жилья повышается риск заболеть и получить штраф.
+                                    @Loc["house.homeless_warning"]
                                 </div>
                             </div>
                         }
                         else
                         {
-                            var propertyInfo = EconomicGame.Services.GameEngine.AvailableProperties
-                                .FirstOrDefault(p => p.Type == Player.Property.Type);
-                            <div class="text-center">
-                                <h1>@propertyInfo.Emoji</h1>
-                                <h4>@Player.Property.Name</h4>
-                                <p><strong>Аренда:</strong> @Player.Property.MonthlyRent.ToString("C") / месяц</p>
-                                <p><strong>Вместимость:</strong> @Player.Property.GuestCapacity гостей</p>
-                                <p><strong>Бонус на ДР:</strong> +@Player.Property.BirthdayGiftBonus.ToString("C")</p>
-                                <hr />
-                                <button class="btn btn-outline-danger" @onclick="SellProperty">
-                                    Продать (за 70%)
-                                </button>
+                            <div class="table-responsive">
+                                <table class="table align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>@Loc["house.name"]</th>
+                                            <th>@Loc["house.rent"]</th>
+                                            <th>@Loc["house.capacity"]</th>
+                                            <th>@Loc["house.birthday_bonus"]</th>
+                                            <th>@Loc["house.until_rent"]</th>
+                                            <th>@Loc["house.action"]</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var property in Player.Properties)
+                                        {
+                                            var info = EconomicGame.Services.GameEngine.AvailableProperties.FirstOrDefault(p => p.Type == property.Type);
+                                            var emoji = info != default ? info.Emoji : "🏡";
+                                            var daysSinceRent = (GameEngine.CurrentTime - property.LastRentPaid).Days;
+                                            var daysUntilRent = GameConstants.RentDueGameDays - daysSinceRent;
+                                            <tr>
+                                                <td class="fw-bold">@emoji @Loc.Entity(property.Name)</td>
+                                                <td>@property.MonthlyRent.ToString("C")</td>
+                                                <td>@property.GuestCapacity @Loc["house.guests_short"]</td>
+                                                <td class="text-success">+@property.BirthdayGiftBonus.ToString("C")</td>
+                                                <td>
+                                                    <span class="badge @(daysUntilRent <= 5 ? "bg-danger" : "bg-info")">
+                                                        @daysUntilRent @Loc["house.days"]
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => SellPropertySpecific(property)">
+                                                        @Loc["house.sell_70"]
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
                             </div>
                         }
                     </div>
@@ -51,25 +79,15 @@
             </div>
 
             <!-- Player stats -->
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>💰 Финансы</h5>
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">💰 @Loc["house.finances"]</h5>
                     </div>
-                    <div class="card-body">
-                        <p><strong>Деньги:</strong> @Player.Money.ToString("C")</p>
-                        <p><strong>Репутация:</strong> @Player.Reputation / 100</p>
-                        @if (Player.Property != null)
-                        {
-                            var daysSinceRent = (GameEngine.CurrentTime - Player.Property.LastRentPaid).Days;
-                            var daysUntilRent = GameConstants.RentDueGameDays - daysSinceRent;
-                            <p>
-                                <strong>До оплаты аренды:</strong> 
-                                <span class="badge @(daysUntilRent <= 5 ? "bg-danger" : "bg-info")">
-                                    @daysUntilRent дней
-                                </span>
-                            </p>
-                        }
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        <p class="mb-2"><strong>@Loc["house.money"]:</strong> <span class="text-success fw-bold">@Player.Money.ToString("C")</span></p>
+                        <p class="mb-2"><strong>@Loc["house.reputation"]:</strong> @Player.Reputation / 100</p>
+                        <p class="mb-0"><strong>@Loc["house.total_homes"]:</strong> @Player.Properties.Count</p>
                     </div>
                 </div>
             </div>
@@ -82,55 +100,48 @@
         }
 
         <!-- Available properties -->
-        <h4>🏘️ Доступная недвижимость</h4>
+        <h4>@Loc["house.available"]</h4>
         <div class="row">
             @foreach (var property in EconomicGame.Services.GameEngine.AvailableProperties)
             {
                 var canAfford = Player.Money >= property.Price;
-                var alreadyOwned = Player.Property?.Type == property.Type;
-                var hasProperty = Player.Property != null;
-                
+                var ownedCount = Player.Properties.Count(p => p.Type == property.Type);
+
                 <div class="col-md-3 mb-3">
-                    <div class="card h-100 @(alreadyOwned ? "border-success" : "") @(!canAfford ? "opacity-75" : "")">
-                        <div class="card-header text-center">
-                            <h1>@property.Emoji</h1>
+                    <div class="card h-100 @(ownedCount > 0 ? "border-success" : "") @(!canAfford ? "opacity-75" : "") shadow-sm">
+                        <div class="card-header text-center bg-transparent border-0 pt-3">
+                            <span style="font-size: 3rem;">@property.Emoji</span>
                         </div>
                         <div class="card-body text-center">
-                            <h5>@property.Name</h5>
-                            <p class="text-primary fw-bold">@property.Price.ToString("C")</p>
-                            <hr />
+                            <h5>@Loc.Entity(property.Name)</h5>
+                            @if (ownedCount > 0)
+                            {
+                                <span class="badge bg-success mb-2">@Loc["log.owned_count"]: @ownedCount</span>
+                            }
+                            <p class="text-primary fw-bold fs-5">@property.Price.ToString("C")</p>
+                            <hr class="my-2" />
                             <p class="small mb-1">
-                                <span class="text-muted">Аренда:</span> @property.Rent.ToString("C")/мес
+                                <span class="text-muted">@Loc["house.rent"]:</span> @property.Rent.ToString("C")@Loc["house.per_month_short"]
                             </p>
                             <p class="small mb-1">
-                                <span class="text-muted">Гости:</span> до @property.Capacity чел.
+                                <span class="text-muted">@Loc["house.guests"]:</span> @property.Capacity @Loc["house.guests_short"]
                             </p>
                             <p class="small mb-1">
-                                <span class="text-muted">Подарки на ДР:</span> +@property.BirthdayBonus.ToString("C")
+                                <span class="text-muted">@Loc["house.birthday_gifts"]:</span> +@property.BirthdayBonus.ToString("C")
                             </p>
                         </div>
-                        <div class="card-footer">
-                            @if (alreadyOwned)
-                            {
-                                <span class="badge bg-success w-100">✓ Твоё жильё</span>
-                            }
-                            else if (hasProperty)
+                        <div class="card-footer bg-transparent border-0 pb-3">
+                            @if (!canAfford)
                             {
                                 <button class="btn btn-outline-secondary btn-sm w-100" disabled>
-                                    Сначала продай текущее
-                                </button>
-                            }
-                            else if (!canAfford)
-                            {
-                                <button class="btn btn-outline-secondary btn-sm w-100" disabled>
-                                    Не хватает @((property.Price - Player.Money).ToString("C"))
+                                    @string.Format(Loc["house.not_enough"], (property.Price - Player.Money).ToString("C"))
                                 </button>
                             }
                             else
                             {
-                                <button class="btn btn-primary btn-sm w-100" 
+                                <button class="btn btn-primary btn-sm w-100"
                                         @onclick="() => BuyProperty(property.Type)">
-                                    Купить
+                                    @Loc["house.buy"]
                                 </button>
                             }
                         </div>
@@ -142,10 +153,9 @@
         <!-- Info about birthday -->
         <div class="card mt-4 bg-light">
             <div class="card-body">
-                <h5>🎂 Как жильё влияет на День Рождения?</h5>
+                <h5>@Loc["house.birthday_info_title"]</h5>
                 <p class="mb-0">
-                    Чем больше твоё жильё, тем больше друзей придёт на ДР и тем больше подарков ты получишь!
-                    Бездомные получают минимальные подарки от случайных прохожих.
+                    @Loc["house.birthday_info_body"]
                 </p>
             </div>
         </div>
@@ -159,12 +169,25 @@
     private string _message = "";
     private string _messageClass = "alert-info";
 
+    protected override void OnInitialized()
+    {
+        Loc.OnLanguageChanged += Refresh;
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= Refresh;
+    }
+
     private void BuyProperty(PropertyType propertyType)
     {
         if (Player == null) return;
 
         var result = GameEngine.BuyProperty(Player, propertyType);
         _message = result;
+        // Service returns Russian; detect success by Russian stem
         _messageClass = result.Contains("Поздравляем") ? "alert-success" : "alert-danger";
         StateHasChanged();
     }
@@ -176,6 +199,16 @@
         var result = GameEngine.SellProperty(Player);
         _message = result;
         _messageClass = result.Contains("Продал") ? "alert-success" : "alert-danger";
+        StateHasChanged();
+    }
+
+    private void SellPropertySpecific(Property property)
+    {
+        if (Player == null || property == null) return;
+
+        var result = GameEngine.SellProperty(Player, property);
+        _message = result;
+        _messageClass = result.Contains("Продал") || result.Contains("Sold") ? "alert-success" : "alert-danger";
         StateHasChanged();
     }
 }

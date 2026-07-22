@@ -1,13 +1,15 @@
 @using EconomicGame
 @using EconomicGame.Configuration
 @inject EconomicGame.Services.GameEngine GameEngine
+@inject LocalizationService Loc
+@implements IDisposable
 
 <div class="inventory">
-    <h2>📦 Инвентарь</h2>
-    
+    <h2>@Loc["inv.inventory"]</h2>
+
     @if (Player == null)
     {
-        <p>Создайте персонажа для просмотра инвентаря.</p>
+        <p>@Loc["inv.create_character"]</p>
     }
     else
     {
@@ -16,14 +18,14 @@
             <div class="col-md-4">
                 <div class="card bg-light">
                     <div class="card-body text-center">
-                        <h5>📊 Использовано</h5>
+                        <h5>📊 @Loc["inv.used"]</h5>
                         <h2 class="@(Player.AvailableCargoSpace < 0 ? "text-danger" : "text-primary")">
                             @Player.CurrentCargoUsed / @Player.TotalCargoCapacity
                         </h2>
                         <div class="progress" style="height: 20px;">
                             @{
-                                var usagePercent = Player.TotalCargoCapacity > 0 
-                                    ? Math.Min(100, (int)((double)Player.CurrentCargoUsed / Player.TotalCargoCapacity * 100)) 
+                                var usagePercent = Player.TotalCargoCapacity > 0
+                                    ? Math.Min(100, (int)((double)Player.CurrentCargoUsed / Player.TotalCargoCapacity * 100))
                                     : 0;
                                 var progressClass = usagePercent > 90 ? "bg-danger" : usagePercent > 70 ? "bg-warning" : "bg-success";
                             }
@@ -31,14 +33,14 @@
                                 @usagePercent%
                             </div>
                         </div>
-                        <small class="text-muted">Свободно: @Player.AvailableCargoSpace ед.</small>
+                        <small class="text-muted">@Loc["inv.free"]: @Player.AvailableCargoSpace @Loc["inv.units"]</small>
                     </div>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="card bg-light">
                     <div class="card-body text-center">
-                        <h5>💰 Стоимость запасов</h5>
+                        <h5>💰 @Loc["inv.stock_value"]</h5>
                         @{
                             var totalValue = Player.Inventory.Sum(i => i.Quantity * GetCurrentPrice(i.ItemName));
                             var totalCost = Player.Inventory.Sum(i => i.Quantity * i.AveragePrice);
@@ -54,9 +56,9 @@
             <div class="col-md-4">
                 <div class="card bg-light">
                     <div class="card-body text-center">
-                        <h5>📦 Позиций</h5>
+                        <h5>📦 @Loc["inv.positions"]</h5>
                         <h2 class="text-info">@Player.Inventory.Count</h2>
-                        <small class="text-muted">уникальных товаров</small>
+                        <small class="text-muted">@Loc["inv.unique_items"]</small>
                     </div>
                 </div>
             </div>
@@ -73,7 +75,7 @@
             {
                 <div class="card mb-3">
                     <div class="card-header bg-secondary text-white">
-                        <h5>⛏️ Сырьё (Raw Materials)</h5>
+                        <h5>@Loc["inv.raw_materials"]</h5>
                     </div>
                     <div class="card-body p-0">
                         @RenderInventoryTable(rawMaterials)
@@ -86,7 +88,7 @@
             {
                 <div class="card mb-3">
                     <div class="card-header bg-success text-white">
-                        <h5>🏭 Продукция (Products)</h5>
+                        <h5>@Loc["inv.products"]</h5>
                     </div>
                     <div class="card-body p-0">
                         @RenderInventoryTable(products)
@@ -97,25 +99,25 @@
             <!-- Grand Total -->
             <div class="card border-primary">
                 <div class="card-header bg-primary text-white">
-                    <h5>📊 Общий итог</h5>
+                    <h5>@Loc["inv.total"]</h5>
                 </div>
                 <div class="card-body">
                     <div class="row text-center">
                         <div class="col-md-3">
-                            <div class="h6 text-muted">Всего единиц</div>
+                            <div class="h6 text-muted">@Loc["inv.total_units"]</div>
                             <div class="h4">@Player.Inventory.Sum(i => i.Quantity)</div>
                         </div>
                         <div class="col-md-3">
-                            <div class="h6 text-muted">Стоимость</div>
+                            <div class="h6 text-muted">@Loc["inv.value"]</div>
                             <div class="h4 text-success">@totalValue.ToString("C")</div>
                         </div>
                         <div class="col-md-3">
-                            <div class="h6 text-muted">Сырьё</div>
-                            <div class="h4">@rawMaterials.Sum(i => i.Quantity) шт.</div>
+                            <div class="h6 text-muted">@Loc["inv.raw_short"]</div>
+                            <div class="h4">@rawMaterials.Sum(i => i.Quantity) @Loc["inv.pcs"]</div>
                         </div>
                         <div class="col-md-3">
-                            <div class="h6 text-muted">Продукция</div>
-                            <div class="h4">@products.Sum(i => i.Quantity) шт.</div>
+                            <div class="h6 text-muted">@Loc["inv.prod_short"]</div>
+                            <div class="h4">@products.Sum(i => i.Quantity) @Loc["inv.pcs"]</div>
                         </div>
                     </div>
                 </div>
@@ -124,45 +126,67 @@
         else
         {
             <div class="alert alert-info">
-                <h5>📭 Инвентарь пуст</h5>
-                <p>У тебя пока нет товаров. Иди на <strong>Рынок</strong> или <strong>Биржу</strong>, чтобы что-нибудь купить!</p>
+                <h5>@Loc["inv.empty_title"]</h5>
+                <p>@Loc["inv.empty_desc"]</p>
             </div>
         }
 
         <!-- Storage info -->
         <div class="row mt-4">
             <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header bg-info text-white">
-                        <h5>🚗 Транспорт</h5>
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-info text-white py-2">
+                        <h5 class="mb-0">@Loc["inv.transport"]</h5>
                     </div>
                     <div class="card-body">
-                        @if (Player.Vehicle != null)
+                        @if (Player.Vehicles != null && Player.Vehicles.Any())
                         {
-                            <p><strong>@Player.Vehicle.Emoji @Player.Vehicle.Name</strong></p>
-                            <p>Вместимость: @Player.Vehicle.CargoCapacity ед.</p>
+                            <ul class="list-group list-group-flush">
+                                @foreach (var vehicle in Player.Vehicles)
+                                {
+                                    <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent px-0 py-1">
+                                        <span>@vehicle.Emoji <strong>@Loc.Entity(vehicle.Name)</strong></span>
+                                        <span class="badge bg-info text-dark rounded-pill fw-semibold">@vehicle.CargoCapacity @Loc["inv.units"]</span>
+                                    </li>
+                                }
+                            </ul>
+                            <div class="mt-2 pt-2 border-top d-flex justify-content-between align-items-center text-muted small">
+                                <strong>@Loc["inv.total"]:</strong>
+                                <span class="fw-bold text-dark">@Player.Vehicles.Sum(v => v.CargoCapacity) @Loc["inv.units"]</span>
+                            </div>
                         }
                         else
                         {
-                            <p class="text-muted">Нет транспорта. Иди в <strong>Логистику</strong>, чтобы купить!</p>
+                            <p class="text-muted mb-0">@Loc["inv.no_transport"]</p>
                         }
                     </div>
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header bg-warning text-dark">
-                        <h5>🏭 Склад</h5>
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-warning text-dark py-2">
+                        <h5 class="mb-0">@Loc["inv.warehouse"]</h5>
                     </div>
                     <div class="card-body">
-                        @if (Player.Warehouse != null)
+                        @if (Player.Warehouses != null && Player.Warehouses.Any())
                         {
-                            <p><strong>@Player.Warehouse.Emoji @Player.Warehouse.Name</strong></p>
-                            <p>Вместимость: @Player.Warehouse.Capacity ед.</p>
+                            <ul class="list-group list-group-flush">
+                                @foreach (var wh in Player.Warehouses)
+                                {
+                                    <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent px-0 py-1">
+                                        <span>@wh.Emoji <strong>@Loc.Entity(wh.Name)</strong></span>
+                                        <span class="badge bg-warning text-dark rounded-pill fw-semibold">@wh.Capacity @Loc["inv.units"]</span>
+                                    </li>
+                                }
+                            </ul>
+                            <div class="mt-2 pt-2 border-top d-flex justify-content-between align-items-center text-muted small">
+                                <strong>@Loc["inv.total"]:</strong>
+                                <span class="fw-bold text-dark">@Player.Warehouses.Sum(w => w.Capacity) @Loc["inv.units"]</span>
+                            </div>
                         }
                         else
                         {
-                            <p class="text-muted">Нет склада. Сначала купи <strong>землю</strong> в Логистике!</p>
+                            <p class="text-muted mb-0">@Loc["inv.no_warehouse"]</p>
                         }
                     </div>
                 </div>
@@ -171,9 +195,86 @@
     }
 </div>
 
+@if (_showListModal && _selectedItem != null)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0, 0, 0, 0.65); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow-lg border-0 rounded-3 text-dark">
+                <div class="modal-header bg-primary text-white py-3">
+                    <h5 class="modal-title fw-bold">
+                        @string.Format(Loc["inv.list_modal_title"], _selectedItem.ItemName)
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseListModal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    @if (!string.IsNullOrEmpty(_errorMessage))
+                    {
+                        <div class="alert alert-danger mb-3 py-2 px-3 small">@_errorMessage</div>
+                    }
+                    @if (!string.IsNullOrEmpty(_successMessage))
+                    {
+                        <div class="alert alert-success mb-3 py-2 px-3 small">@_successMessage</div>
+                    }
+
+                    <div class="mb-3 text-start">
+                        <label class="form-label fw-semibold mb-1">@Loc["inv.list_quantity"]</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" class="form-control" @bind="_listQuantity" min="1" max="@_selectedItem.Quantity" />
+                            <button class="btn btn-outline-secondary" type="button" @onclick="SetMaxQuantity">@Loc["inv.list_max"] (@_selectedItem.Quantity)</button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 text-start">
+                        <label class="form-label fw-semibold mb-1">@Loc["inv.list_price"]</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_listPrice" min="0.01" step="0.01" />
+                        <small class="text-muted d-block mt-1">
+                            @Loc["inv.current_price"]: @GetCurrentPrice(_selectedItem.ItemName).ToString("C")
+                        </small>
+                    </div>
+
+                    <div class="form-check form-switch mb-3 text-start">
+                        <input class="form-check-input" type="checkbox" id="modalAutoRepeat" @bind="_listAutoRepeat" />
+                        <label class="form-check-label fw-semibold ms-2" for="modalAutoRepeat">
+                            @Loc["inv.list_auto_repeat"]
+                        </label>
+                    </div>
+
+                    <div class="text-muted small text-start border-top pt-2">
+                        <span class="badge bg-warning text-dark me-1">ℹ️</span> @Loc["inv.list_fee_warning"]
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0 py-2">
+                    <button type="button" class="btn btn-sm btn-secondary px-3" @onclick="CloseListModal">@Loc["inv.list_cancel"]</button>
+                    <button type="button" class="btn btn-sm btn-primary px-3 fw-bold" @onclick="SubmitListing" disabled="@(!string.IsNullOrEmpty(_successMessage))">@Loc["inv.list_confirm"]</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter]
     public Player? Player { get; set; }
+
+    private InventoryItem? _selectedItem;
+    private int _listQuantity;
+    private decimal _listPrice;
+    private bool _listAutoRepeat;
+    private bool _showListModal;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    protected override void OnInitialized()
+    {
+        Loc.OnLanguageChanged += Refresh;
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= Refresh;
+    }
 
     private decimal GetCurrentPrice(string itemName)
     {
@@ -186,6 +287,64 @@
         return GameConstants.RawMaterials.Contains(itemName);
     }
 
+    private void OpenListModal(InventoryItem item)
+    {
+        _selectedItem = item;
+        _listQuantity = item.Quantity;
+        _listPrice = GetCurrentPrice(item.ItemName);
+        _listAutoRepeat = false;
+        _showListModal = true;
+        _errorMessage = null;
+        _successMessage = null;
+    }
+
+    private void CloseListModal()
+    {
+        _showListModal = false;
+        _selectedItem = null;
+    }
+
+    private void SetMaxQuantity()
+    {
+        if (_selectedItem != null)
+        {
+            _listQuantity = _selectedItem.Quantity;
+        }
+    }
+
+    private void SubmitListing()
+    {
+        if (Player == null || _selectedItem == null) return;
+        
+        if (_listQuantity <= 0 || _listQuantity > _selectedItem.Quantity)
+        {
+            _errorMessage = Loc["inv.list_quantity_invalid"];
+            return;
+        }
+        if (_listPrice <= 0)
+        {
+            _errorMessage = Loc["inv.list_price_invalid"];
+            return;
+        }
+
+        var result = GameEngine.CreateListing(Player, _selectedItem.ItemName, _listQuantity, _listPrice, _listAutoRepeat);
+        if (result.StartsWith("Listed"))
+        {
+            _successMessage = string.Format(Loc["inv.list_success"], _selectedItem.ItemName, _listQuantity, _listPrice);
+            _errorMessage = null;
+            
+            // Auto dismiss modal after 1.2 seconds and force re-render
+            System.Threading.Tasks.Task.Delay(1200).ContinueWith(_ => InvokeAsync(() => {
+                CloseListModal();
+                StateHasChanged();
+            }));
+        }
+        else
+        {
+            _errorMessage = string.Format(Loc["inv.list_error"], result);
+        }
+    }
+
     private RenderFragment RenderInventoryTable(List<InventoryItem> items) => builder =>
     {
         builder.OpenElement(0, "table");
@@ -195,12 +354,13 @@
         builder.OpenElement(2, "thead");
         builder.AddAttribute(3, "class", "table-dark");
         builder.OpenElement(4, "tr");
-        builder.OpenElement(5, "th"); builder.AddContent(6, "Товар"); builder.CloseElement();
-        builder.OpenElement(7, "th"); builder.AddAttribute(8, "class", "text-center"); builder.AddContent(9, "Кол-во"); builder.CloseElement();
-        builder.OpenElement(10, "th"); builder.AddAttribute(11, "class", "text-end"); builder.AddContent(12, "Ср. цена"); builder.CloseElement();
-        builder.OpenElement(13, "th"); builder.AddAttribute(14, "class", "text-end"); builder.AddContent(15, "Текущая"); builder.CloseElement();
-        builder.OpenElement(16, "th"); builder.AddAttribute(17, "class", "text-end"); builder.AddContent(18, "Стоимость"); builder.CloseElement();
-        builder.OpenElement(19, "th"); builder.AddAttribute(20, "class", "text-end"); builder.AddContent(21, "П/У"); builder.CloseElement();
+        builder.OpenElement(5, "th"); builder.AddContent(6, Loc["inv.item"]); builder.CloseElement();
+        builder.OpenElement(7, "th"); builder.AddAttribute(8, "class", "text-center"); builder.AddContent(9, Loc["inv.qty"]); builder.CloseElement();
+        builder.OpenElement(10, "th"); builder.AddAttribute(11, "class", "text-end"); builder.AddContent(12, Loc["inv.avg_price"]); builder.CloseElement();
+        builder.OpenElement(13, "th"); builder.AddAttribute(14, "class", "text-end"); builder.AddContent(15, Loc["inv.current_price"]); builder.CloseElement();
+        builder.OpenElement(16, "th"); builder.AddAttribute(17, "class", "text-end"); builder.AddContent(18, Loc["inv.value"]); builder.CloseElement();
+        builder.OpenElement(19, "th"); builder.AddAttribute(20, "class", "text-end"); builder.AddContent(21, Loc["inv.pl"]); builder.CloseElement();
+        builder.OpenElement(48, "th"); builder.AddAttribute(49, "class", "text-center"); builder.AddContent(50, Loc["inv.actions"]); builder.CloseElement();
         builder.CloseElement(); // tr
         builder.CloseElement(); // thead
 
@@ -215,7 +375,7 @@
             var profitPercent = itemTotalCost > 0 ? (itemProfit / itemTotalCost * 100) : 0;
 
             builder.OpenElement(23, "tr");
-            
+
             builder.OpenElement(24, "td");
             builder.OpenElement(25, "strong"); builder.AddContent(26, item.ItemName); builder.CloseElement();
             builder.CloseElement();
@@ -256,6 +416,16 @@
             builder.CloseElement();
             builder.CloseElement();
 
+            // Actions column
+            builder.OpenElement(51, "td");
+            builder.AddAttribute(52, "class", "text-center");
+            builder.OpenElement(53, "button");
+            builder.AddAttribute(54, "class", "btn btn-sm btn-primary py-0 px-2 fw-semibold");
+            builder.AddAttribute(55, "onclick", EventCallback.Factory.Create(this, () => OpenListModal(item)));
+            builder.AddContent(56, Loc["inv.list_for_sale"]);
+            builder.CloseElement(); // button
+            builder.CloseElement(); // td
+
             builder.CloseElement(); // tr
         }
         builder.CloseElement(); // tbody
@@ -263,3 +433,4 @@
         builder.CloseElement(); // table
     };
 }
+

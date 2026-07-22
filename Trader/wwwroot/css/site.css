@@ -1,12 +1,22 @@
-﻿.container-fluid {
+.container-fluid {
     height: 100vh;
 }
 
 .sidebar {
-    background-color: #343a40;
+    background-color: #1a1a2e;
     color: white;
-    padding: 15px;
-    height: 100%;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+@keyframes pulse-red {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+    70% { transform: scale(1.02); box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+}
+
+.animate-pulse {
+    animation: pulse-red 2s infinite;
 }
 
 .nav-link {

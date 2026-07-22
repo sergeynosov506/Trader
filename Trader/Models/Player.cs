@@ -13,9 +13,27 @@ namespace EconomicGame
         public required string Name { get; set; }
         public decimal Money { get; set; } = GameConstants.InitialPlayerMoney;
         public List<InventoryItem> Inventory { get; set; } = new List<InventoryItem>();
-        public Vehicle? Vehicle { get; set; } = null;
-        public Property? Property { get; set; }
-        public Land? Land { get; set; }
+        public List<Vehicle> Vehicles { get; set; } = new List<Vehicle>();
+        public List<Property> Properties { get; set; } = new List<Property>();
+        public List<Land> Lands { get; set; } = new List<Land>();
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public Land? Land
+        {
+            get => Lands.FirstOrDefault();
+            set
+            {
+                if (value == null)
+                {
+                    if (Lands.Any()) Lands.RemoveAt(0);
+                }
+                else
+                {
+                    if (Lands.Any()) Lands[0] = value;
+                    else Lands.Add(value);
+                }
+            }
+        }
         
         // Multi-warehouse system (Trader Path)
         public List<Warehouse> Warehouses { get; set; } = new List<Warehouse>();
@@ -27,7 +45,12 @@ namespace EconomicGame
         public List<IndustrialFactory> Factories { get; set; } = new List<IndustrialFactory>();
         public List<Guid> RivalPlayerIds { get; set; } = new List<Guid>();
         public List<Guid> OwnedAIIds { get; set; } = new List<Guid>();
-        public bool IsSabotaged { get; set; }
+        private bool _isSabotaged;
+        public bool IsSabotaged
+        {
+            get => _isSabotaged && TradingLicenseLevel == 0;
+            set => _isSabotaged = value;
+        }
         public DateTime? SabotageEndTime { get; set; }
         public Guid? OwnerId { get; set; }
         public decimal CorporateThreatLevel { get; set; } // 0.0 to 1.0
@@ -56,13 +79,41 @@ namespace EconomicGame
         public int IntoxicationLevel { get; set; } = 0;
         public DateTime? LastBarVisit { get; set; }
         public DateTime? SoberUpTime { get; set; }
+
+        // Bar gambling limits (economy rebalance): net winnings per game day
+        public decimal BarWinningsToday { get; set; } = 0m;
+        public DateTime? BarWinningsDate { get; set; }
+
+        // Poker career stats (player and bots alike)
+        public int PokerHandsPlayed { get; set; }
+        public int PokerHandsWon { get; set; }
+        public decimal PokerProfit { get; set; }
+        public decimal PokerBiggestPot { get; set; }
         
         // Production system
         public List<Guid> AutoProductionRecipes { get; set; } = new List<Guid>();
+        public Dictionary<Guid, int> AutoProductionMinReserves { get; set; } = new Dictionary<Guid, int>();
+        public Dictionary<Guid, int> AutoProductionMaxStock { get; set; } = new Dictionary<Guid, int>();
+        public Dictionary<Guid, int> AutoProductionLevels { get; set; } = new Dictionary<Guid, int>();
+        // Ticks elapsed in the current production cycle per recipe (recipes now take real time)
+        public Dictionary<Guid, int> AutoProductionProgress { get; set; } = new Dictionary<Guid, int>();
 
         // Stock Market Portfolio (Investor Path)
         public StockPortfolio Portfolio { get; set; } = new StockPortfolio();
         public decimal DividendIncome { get; set; } = 0; // Lifetime dividend income
+
+        // Active scenario / challenge (null = freeplay)
+        public string? ActiveScenarioId { get; set; }
+        public DateTime? ScenarioStartTime { get; set; }
+        public ScenarioStatus ScenarioStatus { get; set; } = ScenarioStatus.None;
+
+        // Scenario race vs bots: rival bots picked at scenario start.
+        // A rival "wins the race" by gaining as much equity as the scenario requires
+        // from the player — then the scenario is lost. (Transient, like all scenario state.)
+        public List<Guid> ScenarioRivalIds { get; set; } = new List<Guid>();
+        public Dictionary<Guid, decimal> ScenarioRivalStartEquity { get; set; } = new Dictionary<Guid, decimal>();
+        public decimal ScenarioStartEquity { get; set; }
+        public string? ScenarioRaceWinner { get; set; }
 
         // Collective Intelligence / Digital Soul
         public GeneticStrategy Strategy { get; set; } = new GeneticStrategy();
@@ -73,7 +124,7 @@ namespace EconomicGame
 
         // Calculated properties
         public int TotalCargoCapacity => 
-            (Vehicle?.CargoCapacity ?? 0) + Warehouses.Sum(w => w.Capacity);
+            Vehicles.Sum(v => v.CargoCapacity) + Warehouses.Sum(w => w.Capacity);
         
         public int CurrentCargoUsed => 
             Inventory.Sum(i => i.Quantity);
@@ -94,16 +145,81 @@ namespace EconomicGame
         };
 
         /// <summary>
-        /// Total net worth including all assets
+        /// Max number of land plots based on trading license level
         /// </summary>
-        public decimal NetWorth =>
-            Money + BankDeposit +
-            Inventory.Sum(i => i.AveragePrice * i.Quantity) +
-            Warehouses.Sum(w => w.PurchasePrice * 0.5m) +
-            (Vehicle?.PurchasePrice ?? 0) * 0.5m +
-            (Land?.PurchasePrice ?? 0) * 0.7m +
-            (Property?.PurchasePrice ?? 0) * 0.7m +
-            Factories.Sum(f => f.PurchasePrice * 0.5m);
+        public int MaxLandPlots => TradingLicenseLevel switch
+        {
+            0 => 1,
+            1 => 2,
+            2 => 3,
+            3 => 5,
+            _ => 1
+        };
+
+        /// <summary>
+        /// Total net worth including all assets. Inventory is valued at cost basis
+        /// here because this property does not have access to the live market.
+        /// For a mark-to-market figure, use <see cref="ComputeMarketNetWorth"/> instead.
+        /// Thread-safe to prevent collection modification exceptions during background ticks.
+        /// </summary>
+        public decimal NetWorth
+        {
+            get
+            {
+                try
+                {
+                    decimal invVal = 0m, whVal = 0m, vehVal = 0m, lndVal = 0m, propVal = 0m, facVal = 0m;
+                    lock (Inventory) invVal = Inventory.Sum(i => i.AveragePrice * i.Quantity);
+                    lock (Warehouses) whVal = Warehouses.Sum(w => w.PurchasePrice * 0.5m);
+                    lock (Vehicles) vehVal = Vehicles.Sum(v => v.PurchasePrice * 0.5m);
+                    lock (Lands) lndVal = Lands.Sum(l => l.PurchasePrice * 0.7m);
+                    lock (Properties) propVal = Properties.Sum(p => p.PurchasePrice * 0.7m);
+                    lock (Factories) facVal = Factories.Sum(f => f.PurchasePrice * 0.5m);
+
+                    return Money + BankDeposit + invVal + whVal + vehVal + lndVal + propVal + facVal;
+                }
+                catch (InvalidOperationException)
+                {
+                    return Money + BankDeposit;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns net worth valuing inventory at current market prices (mark-to-market).
+        /// Falls back to cost basis for items missing from the market snapshot.
+        /// Thread-safe against concurrent collection modifications.
+        /// </summary>
+        public decimal ComputeMarketNetWorth(IEnumerable<MarketItem> marketItems)
+        {
+            try
+            {
+                decimal inventoryValue = 0m;
+                InventoryItem[] invSnapshot;
+                lock (Inventory) invSnapshot = Inventory.ToArray();
+
+                var mSnapshot = marketItems.ToList();
+                foreach (var item in invSnapshot)
+                {
+                    var market = mSnapshot.FirstOrDefault(m => m.Name == item.ItemName);
+                    var unit = market?.CurrentPrice ?? item.AveragePrice;
+                    inventoryValue += unit * item.Quantity;
+                }
+
+                decimal whVal = 0m, vehVal = 0m, lndVal = 0m, propVal = 0m, facVal = 0m;
+                lock (Warehouses) whVal = Warehouses.Sum(w => w.PurchasePrice * 0.5m);
+                lock (Vehicles) vehVal = Vehicles.Sum(v => v.PurchasePrice * 0.5m);
+                lock (Lands) lndVal = Lands.Sum(l => l.PurchasePrice * 0.7m);
+                lock (Properties) propVal = Properties.Sum(p => p.PurchasePrice * 0.7m);
+                lock (Factories) facVal = Factories.Sum(f => f.PurchasePrice * 0.5m);
+
+                return Money + BankDeposit + inventoryValue + whVal + vehVal + lndVal + propVal + facVal;
+            }
+            catch (InvalidOperationException)
+            {
+                return Money + BankDeposit;
+            }
+        }
 
         // Backward compatibility — returns first warehouse or null
         [System.Text.Json.Serialization.JsonIgnore]
@@ -120,6 +236,44 @@ namespace EconomicGame
                 {
                     if (Warehouses.Any()) Warehouses[0] = value;
                     else Warehouses.Add(value);
+                }
+            }
+        }
+
+        // Backward compatibility — returns first vehicle or null
+        [System.Text.Json.Serialization.JsonIgnore]
+        public Vehicle? Vehicle
+        {
+            get => Vehicles.FirstOrDefault();
+            set
+            {
+                if (value == null)
+                {
+                    if (Vehicles.Any()) Vehicles.RemoveAt(0);
+                }
+                else
+                {
+                    if (Vehicles.Any()) Vehicles[0] = value;
+                    else Vehicles.Add(value);
+                }
+            }
+        }
+
+        // Backward compatibility — returns first property or null
+        [System.Text.Json.Serialization.JsonIgnore]
+        public Property? Property
+        {
+            get => Properties.FirstOrDefault();
+            set
+            {
+                if (value == null)
+                {
+                    if (Properties.Any()) Properties.RemoveAt(0);
+                }
+                else
+                {
+                    if (Properties.Any()) Properties[0] = value;
+                    else Properties.Add(value);
                 }
             }
         }
@@ -171,6 +325,7 @@ namespace EconomicGame
 
     public class Land
     {
+        public Guid Id { get; set; } = Guid.NewGuid();
         public required LandType Type { get; set; }
         public required string Name { get; set; }
         public string Emoji { get; set; } = "🏞️";
@@ -272,6 +427,30 @@ namespace EconomicGame
         Market,
         Limit,
         StopLoss
+    }
+
+    /// <summary>
+    /// Flavor types for random bar encounters returned by TryMeetSomeone.
+    /// UI uses this to pick the right translation and show context-aware actions
+    /// (e.g. "Buy him a drink" button for DrinkTogether).
+    /// </summary>
+    public enum BarEncounterType
+    {
+        DrinkTogether,   // Some guy sits down and wants to drink together
+        BarmanStories,   // Barman tells market stories
+        FellowTrader,    // A fellow trader spotted in the corner
+        LoudCrowd        // Loud group discussing deals nearby
+    }
+
+    /// <summary>
+    /// Scam flavor outcomes when buying a drink for the stranger backfires.
+    /// UI localizes via Loc["bar.scam_*"].
+    /// </summary>
+    public enum BarScamType
+    {
+        DrinkAndLeave,   // He downs the drink and just walks out
+        BoringStory,     // He rambles on about something useless for an hour
+        BathroomExit,    // "Be right back" — never comes back
     }
 
     public class StockOrder

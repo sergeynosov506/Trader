@@ -17,6 +17,29 @@
         </div>
     </div>
     
+    <!-- Wealth race: player vs top bots by net worth -->
+    <div class="mb-4">
+        <h5 class="text-warning">🏁 Гонка капиталов</h5>
+        <table class="table table-dark table-sm align-middle">
+            <thead class="text-info">
+                <tr><th>#</th><th>Игрок</th><th>Капитал (net worth)</th><th>Заводы</th><th>Лицензия</th></tr>
+            </thead>
+            <tbody>
+                @{ int lbRank = 1; }
+                @foreach (var p in Leaderboard)
+                {
+                    <tr class="@(p.IsAI ? "" : "table-active fw-bold")">
+                        <td>@(lbRank++)</td>
+                        <td>@(p.IsAI ? "🤖 " : "👤 ")@p.Name</td>
+                        <td class="text-warning">@p.NetWorth.ToString("C0")</td>
+                        <td>@p.Factories</td>
+                        <td>@(p.License > 0 ? $"L{p.License}" : "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
     <div class="table-responsive" style="min-height: 500px;">
         <table class="table table-dark table-hover align-middle" style="font-family: 'Courier New', Courier, monospace;">
             <thead class="text-info border-secondary">
@@ -107,9 +130,44 @@
     private int CurrentPage { get; set; } = 0;
     private int PageSize { get; set; } = 15;
 
-    private IEnumerable<Player> PaginatedPlayers => 
+    private IEnumerable<Player> PaginatedPlayers =>
         _aiPlayers.OrderByDescending(p => p.Money).ThenByDescending(p => p.DailyProfit)
                  .Skip(CurrentPage * PageSize).Take(PageSize);
+
+    /// <summary>
+    /// Top-10 by net worth, human player always included.
+    /// NetWorth iterates player inventories which the game tick mutates concurrently,
+    /// so the computation can throw "collection was modified" mid-render. We keep the
+    /// last successful snapshot and fall back to it — the next tick refreshes anyway.
+    /// </summary>
+    private record LeaderboardRow(string Name, bool IsAI, decimal NetWorth, string Factories, int License);
+    private List<LeaderboardRow> _leaderboardCache = new();
+
+    private IEnumerable<LeaderboardRow> Leaderboard
+    {
+        get
+        {
+            try
+            {
+                var all = PlayerService.GetAllPlayers()
+                    .Select(p => new LeaderboardRow(
+                        p.Name, p.IsAI, p.NetWorth,
+                        p.Factories.Any() ? string.Join(" ", p.Factories.Select(f => f.Emoji)) : "—",
+                        p.TradingLicenseLevel))
+                    .OrderByDescending(r => r.NetWorth)
+                    .ToList();
+                var top = all.Take(10).ToList();
+                var human = all.FirstOrDefault(r => !r.IsAI);
+                if (human != null && !top.Contains(human)) top.Add(human);
+                _leaderboardCache = top;
+            }
+            catch (InvalidOperationException)
+            {
+                // Collection modified during enumeration — serve the cached snapshot
+            }
+            return _leaderboardCache;
+        }
+    }
 
     private int TotalPages => (int)Math.Ceiling((double)_aiPlayers.Count / PageSize);
 

@@ -2,14 +2,16 @@
 @using EconomicGame.Models
 @inject EconomicGame.Services.SaveGameService SaveService
 @inject EconomicGame.Services.GameEngine GameEngine
+@inject LocalizationService Loc
+@implements IDisposable
 
 <div class="save-load">
-    <h2>💾 Сохранение / Загрузка</h2>
+    <h2>@Loc["save.title"]</h2>
 
     @if (Player == null)
     {
         <div class="alert alert-warning">
-            Создайте персонажа для сохранения игры.
+            @Loc["save.create_character"]
         </div>
     }
     else
@@ -17,28 +19,28 @@
         <!-- Save section -->
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
-                <h5>💾 Сохранить игру</h5>
+                <h5>@Loc["save.save_game"]</h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label class="form-label">Название сохранения</label>
-                            <input type="text" @bind="_saveName" class="form-control" 
-                                   placeholder="Моё сохранение..." maxlength="50" />
+                            <label class="form-label">@Loc["save.name_label"]</label>
+                            <input type="text" @bind="_saveName" class="form-control"
+                                   placeholder="@Loc["save.name_placeholder"]" maxlength="50" />
                         </div>
                         <button class="btn btn-primary" @onclick="SaveGame">
-                            💾 Сохранить
+                            @Loc["save.save_btn"]
                         </button>
                     </div>
                     <div class="col-md-6">
                         <div class="card bg-light">
                             <div class="card-body">
-                                <h6>Текущий прогресс:</h6>
-                                <p><strong>Игрок:</strong> @Player.Name</p>
-                                <p><strong>Деньги:</strong> @Player.Money.ToString("C")</p>
-                                <p><strong>День:</strong> @(((GameEngine.CurrentTime - DateTime.Today).Days) + 1)</p>
-                                <p><strong>Время:</strong> @GameEngine.CurrentTime.ToString("t")</p>
+                                <h6>@Loc["save.progress"]</h6>
+                                <p><strong>@Loc["save.player"]:</strong> @Player.Name</p>
+                                <p><strong>@Loc["save.money"]:</strong> @Player.Money.ToString("C")</p>
+                                <p><strong>@Loc["save.day"]:</strong> @(((GameEngine.CurrentTime - DateTime.Today).Days) + 1)</p>
+                                <p><strong>@Loc["save.time"]:</strong> @GameEngine.CurrentTime.ToString("t")</p>
                             </div>
                         </div>
                     </div>
@@ -55,16 +57,16 @@
         <!-- Load section -->
         <div class="card">
             <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">📂 Загрузить игру</h5>
+                <h5 class="mb-0">@Loc["save.load_game"]</h5>
                 <button class="btn btn-sm btn-outline-light" @onclick="RefreshSaves">
-                    🔄 Обновить
+                    @Loc["save.refresh"]
                 </button>
             </div>
             <div class="card-body">
                 @if (!_saves.Any())
                 {
                     <div class="alert alert-info">
-                        Нет сохранённых игр. Создай своё первое сохранение!
+                        @Loc["save.empty"]
                     </div>
                 }
                 else
@@ -72,12 +74,12 @@
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th>Название</th>
-                                <th>Игрок</th>
-                                <th>День</th>
-                                <th>Деньги</th>
-                                <th>Сохранено</th>
-                                <th>Действия</th>
+                                <th>@Loc["save.col_name"]</th>
+                                <th>@Loc["save.col_player"]</th>
+                                <th>@Loc["save.col_day"]</th>
+                                <th>@Loc["save.col_money"]</th>
+                                <th>@Loc["save.col_saved_at"]</th>
+                                <th>@Loc["save.col_actions"]</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -86,15 +88,15 @@
                                 <tr>
                                     <td><strong>@save.Data.SaveName</strong></td>
                                     <td>@save.Data.PlayerData?.Name</td>
-                                    <td>День @save.Data.GameDay</td>
+                                    <td>@string.Format(Loc["save.day_n"], save.Data.GameDay)</td>
                                     <td>@(save.Data.PlayerData?.Money.ToString("C") ?? "-")</td>
                                     <td class="text-muted small">@save.Data.SavedAt.ToString("g")</td>
                                     <td>
-                                        <button class="btn btn-sm btn-success me-1" 
+                                        <button class="btn btn-sm btn-success me-1"
                                                 @onclick="() => LoadGame(save.FileName)">
-                                            📂 Загрузить
+                                            @Loc["save.load_btn"]
                                         </button>
-                                        <button class="btn btn-sm btn-outline-danger" 
+                                        <button class="btn btn-sm btn-outline-danger"
                                                 @onclick="() => DeleteSave(save.FileName)">
                                             🗑️
                                         </button>
@@ -109,11 +111,11 @@
 
         <div class="card mt-4 bg-light">
             <div class="card-body">
-                <h6>ℹ️ Информация</h6>
+                <h6>@Loc["save.info_title"]</h6>
                 <ul class="mb-0 small">
-                    <li>Сохранения хранятся в: <code>%APPDATA%\Trader\Saves\</code></li>
-                    <li>Загрузка заменит текущий прогресс</li>
-                    <li>Рекомендуется сохраняться регулярно!</li>
+                    <li>@Loc["save.info_location"]<code>%APPDATA%\Trader\Saves\</code></li>
+                    <li>@Loc["save.info_replace"]</li>
+                    <li>@Loc["save.info_regular"]</li>
                 </ul>
             </div>
         </div>
@@ -131,8 +133,16 @@
 
     protected override void OnInitialized()
     {
+        Loc.OnLanguageChanged += Refresh;
         RefreshSaves();
-        _saveName = $"Сохранение {DateTime.Now:dd.MM.yyyy}";
+        _saveName = string.Format(Loc["save.default_name"], DateTime.Now.ToString("dd.MM.yyyy"));
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= Refresh;
     }
 
     private void RefreshSaves()
@@ -145,7 +155,7 @@
     {
         if (string.IsNullOrWhiteSpace(_saveName))
         {
-            _message = "❌ Введи название сохранения!";
+            _message = Loc["save.name_required"];
             _messageClass = "alert-danger";
             return;
         }

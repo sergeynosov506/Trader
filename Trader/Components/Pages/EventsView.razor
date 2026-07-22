@@ -1,12 +1,14 @@
 @using EconomicGame
 @inject EconomicGame.Services.GameEngine GameEngine
+@inject LocalizationService Loc
+@implements IDisposable
 
 <div class="events">
-    <h2>🎲 События</h2>
-    
+    <h2>@Loc["events.title"]</h2>
+
     @if (Player == null)
     {
-        <p>Создайте персонажа для просмотра событий.</p>
+        <p>@Loc["events.create_character"]</p>
     }
     else
     {
@@ -14,10 +16,10 @@
             <div class="col-md-6">
                 <div class="card bg-light">
                     <div class="card-body">
-                        <h5>Ваш профиль</h5>
-                        <p><strong>Имя:</strong> @Player.Name</p>
-                        <p><strong>Деньги:</strong> @Player.Money.ToString("C")</p>
-                        <p><strong>Репутация:</strong> 
+                        <h5>@Loc["events.profile"]</h5>
+                        <p><strong>@Loc["events.name"]:</strong> @Player.Name</p>
+                        <p><strong>@Loc["events.money"]:</strong> @Player.Money.ToString("C")</p>
+                        <p><strong>@Loc["events.reputation"]:</strong>
                             <span class="badge @GetReputationBadgeClass()">
                                 @Player.Reputation / 100
                             </span>
@@ -30,8 +32,8 @@
         @if (!GetActiveEvents().Any())
         {
             <div class="alert alert-info">
-                <h5>📭 Нет активных событий</h5>
-                <p>Продолжайте играть — скоро что-нибудь произойдёт!</p>
+                <h5>@Loc["events.none"]</h5>
+                <p>@Loc["events.none_desc"]</p>
             </div>
         }
         else
@@ -42,27 +44,27 @@
                     <div class="col-md-6 mb-3">
                         <div class="card @GetEventCardClass(gameEvent)">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">@gameEvent.Title</h5>
+                                <h5 class="mb-0">@Loc.T(gameEvent.Title)</h5>
                                 <span class="badge bg-secondary">
                                     ⏰ @GetTimeRemaining(gameEvent)
                                 </span>
                             </div>
                             <div class="card-body">
-                                <p class="card-text">@gameEvent.Description</p>
-                                
+                                <p class="card-text">@Loc.T(gameEvent.Description)</p>
+
                                 <hr />
-                                
+
                                 <div class="d-grid gap-2">
                                     @foreach (var choice in gameEvent.Choices)
                                     {
                                         var canAfford = !choice.Cost.HasValue || Player.Money >= choice.Cost.Value;
-                                        <button class="btn @(canAfford ? "btn-primary" : "btn-secondary")" 
+                                        <button class="btn @(canAfford ? "btn-primary" : "btn-secondary")"
                                                 disabled="@(!canAfford)"
                                                 @onclick="() => MakeChoice(gameEvent, choice)">
-                                            @choice.Text
+                                            @Loc.T(choice.Text)
                                             @if (!canAfford && choice.Cost.HasValue)
                                             {
-                                                <span class="text-warning">(недостаточно денег)</span>
+                                                <span class="text-warning">@Loc["events.insufficient"]</span>
                                             }
                                         </button>
                                     }
@@ -77,14 +79,14 @@
         @if (!string.IsNullOrEmpty(_message))
         {
             <div class="alert @_messageClass mt-3">
-                <strong>Результат:</strong> @_message
+                <strong>@Loc["events.result"]</strong> @Loc.T(_message)
             </div>
         }
 
         <hr />
-        
+
         <div class="mt-4">
-            <h4>📜 История событий</h4>
+            <h4>@Loc["events.history"]</h4>
             @{
                 var completedEvents = Player.PendingEvents.Where(e => e.IsExpired).OrderByDescending(e => e.ExpiresAt).Take(5).ToList();
             }
@@ -95,18 +97,18 @@
                     {
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <div>
-                                <strong>@evt.Title</strong>
+                                <strong>@Loc.T(evt.Title)</strong>
                                 <br />
-                                <small class="text-muted">@evt.OutcomeMessage</small>
+                                <small class="text-muted">@(string.IsNullOrEmpty(evt.OutcomeMessage) ? "" : Loc.T(evt.OutcomeMessage))</small>
                             </div>
-                            <span class="badge bg-secondary">Завершено</span>
+                            <span class="badge bg-secondary">@Loc["events.completed"]</span>
                         </li>
                     }
                 </ul>
             }
             else
             {
-                <p class="text-muted">История пуста. Принимай решения!</p>
+                <p class="text-muted">@Loc["events.history_empty"]</p>
             }
         </div>
     }
@@ -119,6 +121,18 @@
     private string _message = "";
     private string _messageClass = "alert-info";
 
+    protected override void OnInitialized()
+    {
+        Loc.OnLanguageChanged += Refresh;
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= Refresh;
+    }
+
     private List<GameEvent> GetActiveEvents()
     {
         return Player?.PendingEvents.Where(e => !e.IsExpired).ToList() ?? new List<GameEvent>();
@@ -127,9 +141,9 @@
     private string GetTimeRemaining(GameEvent evt)
     {
         var remaining = evt.ExpiresAt - GameEngine.CurrentTime;
-        if (remaining.TotalMinutes < 0) return "Истекло!";
-        if (remaining.TotalHours >= 1) return $"{(int)remaining.TotalHours}ч {remaining.Minutes}м";
-        return $"{remaining.Minutes}м";
+        if (remaining.TotalMinutes < 0) return Loc["events.expired"];
+        if (remaining.TotalHours >= 1) return $"{(int)remaining.TotalHours}{Loc["events.hours_short"]} {remaining.Minutes}{Loc["events.minutes_short"]}";
+        return $"{remaining.Minutes}{Loc["events.minutes_short"]}";
     }
 
     private string GetEventCardClass(GameEvent evt)
@@ -155,6 +169,7 @@
 
         var result = GameEngine.RespondToEvent(Player, gameEvent.EventId, choice.ChoiceId);
         _message = result;
+        // Service returns Russian for outcome messages; detect negative outcome by Russian stems
         _messageClass = result.Contains("ухудш") || result.Contains("развод") ? "alert-warning" : "alert-success";
         StateHasChanged();
     }

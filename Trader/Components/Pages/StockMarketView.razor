@@ -3,26 +3,28 @@
 @using EconomicGame.Models
 @inject EconomicGame.Services.GameEngine GameEngine
 @inject EconomicGame.Services.StockMarketService StockMarketService
+@inject LocalizationService Loc
+@implements IDisposable
 
 <div class="stock-market">
-    <h2>📊 Фондовый рынок</h2>
-    
+    <h2>@Loc["stock.title"]</h2>
+
     @if (Player == null)
     {
-        <p>Создайте персонажа для доступа к фондовому рынку.</p>
+        <p>@Loc["stock.create_character"]</p>
     }
     else if (Player.Vehicle == null)
     {
         <div class="alert alert-danger">
-            <strong>Нет доступа!</strong> Нужна машина для поездки на биржу. <br/>
-            Купите транспорт в разделе Рынок.
+            <strong>@Loc["stock.no_access"]</strong> @Loc["stock.need_car"] <br/>
+            @Loc["stock.buy_car_market"]
         </div>
     }
     else if (GameEngine.CurrentTime.Hour < GameConstants.StockMarketOpenHour || GameEngine.CurrentTime.Hour >= GameConstants.StockMarketCloseHour)
     {
         <div class="alert alert-warning">
-            <strong>Закрыто!</strong> Фондовый рынок работает с @(GameConstants.StockMarketOpenHour):00 до @(GameConstants.StockMarketCloseHour):00. <br/>
-            Текущее время: @GameEngine.CurrentTime.ToShortTimeString()
+            <strong>@Loc["stock.closed"]</strong> @string.Format(Loc["stock.hours"], GameConstants.StockMarketOpenHour, GameConstants.StockMarketCloseHour) <br/>
+            @Loc["stock.current_time"]: @GameEngine.CurrentTime.ToShortTimeString()
         </div>
     }
     else
@@ -32,7 +34,7 @@
             <div class="col-md-3">
                 <div class="card bg-light">
                     <div class="card-body text-center">
-                        <h6>💰 Баланс</h6>
+                        <h6>@Loc["stock.balance"]</h6>
                         <h4 class="text-success">@Player.Money.ToString("C")</h4>
                     </div>
                 </div>
@@ -40,7 +42,7 @@
             <div class="col-md-3">
                 <div class="card bg-light">
                     <div class="card-body text-center">
-                        <h6>📊 Портфель</h6>
+                        <h6>@Loc["stock.portfolio"]</h6>
                         <h4 class="text-primary">@StockMarketService.GetPortfolioValue(Player).ToString("C")</h4>
                     </div>
                 </div>
@@ -61,7 +63,7 @@
             <div class="col-md-3">
                 <div class="card bg-light">
                     <div class="card-body text-center">
-                        <h6>💵 Дивиденды</h6>
+                        <h6>@Loc["stock.dividends"]</h6>
                         <h4 class="text-info">@Player.DividendIncome.ToString("C")</h4>
                     </div>
                 </div>
@@ -79,22 +81,22 @@
         <!-- Stocks Table -->
         <div class="card mb-3">
             <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">📊 Акции</h5>
-                <small>Комиссия: @((GameConstants.StockBrokerFee * 100).ToString("F0"))%</small>
+                <h5 class="mb-0">@Loc["stock.stocks"]</h5>
+                <small>@Loc["stock.fee"]: @((GameConstants.StockBrokerFee * 100).ToString("F0"))%</small>
             </div>
             <div class="card-body p-0">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
                             <th></th>
-                            <th>Тикер</th>
-                            <th>Компания</th>
-                            <th>Цена</th>
-                            <th>Изменение</th>
-                            <th>Доходность</th>
-                            <th>Доступно</th>
-                            <th>В портфеле</th>
-                            <th>Действия</th>
+                            <th>@Loc["stock.ticker"]</th>
+                            <th>@Loc["stock.company"]</th>
+                            <th>@Loc["stock.price"]</th>
+                            <th>@Loc["stock.change"]</th>
+                            <th>@Loc["stock.yield"]</th>
+                            <th>@Loc["stock.available"]</th>
+                            <th>@Loc["stock.held"]</th>
+                            <th>@Loc["stock.actions"]</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -109,7 +111,7 @@
                             var changeColor = change >= 0 ? "text-success" : "text-danger";
                             var changeIcon = change > 0 ? "▲" : (change < 0 ? "▼" : "—");
                             var playerShares = Player.Portfolio.Holdings.GetValueOrDefault(stock.Ticker, 0);
-                            
+
                             <tr>
                                 <td style="font-size: 1.5rem;">@stock.Emoji</td>
                                 <td><strong>@stock.Ticker</strong></td>
@@ -128,7 +130,7 @@
                                         var avgBuy = Player.Portfolio.AvgBuyPrice.GetValueOrDefault(stock.Ticker, stock.SharePrice);
                                         var holdingPnl = (stock.SharePrice - avgBuy) * playerShares;
                                         var holdPnlColor = holdingPnl >= 0 ? "text-success" : "text-danger";
-                                        <span>@playerShares шт.</span>
+                                        <span>@playerShares @Loc["stock.shares_short"]</span>
                                         <br/>
                                         <small class="@holdPnlColor">@holdingPnl.ToString("+#,##0.00;-#,##0.00")</small>
                                     }
@@ -140,16 +142,16 @@
                                 <td>
                                     <div class="d-flex flex-column gap-1">
                                         <div class="d-flex align-items-center gap-1">
-                                            <input type="number" @bind="_stockQuantities[stock.Ticker]" min="1" max="@stock.AvailableShares" 
+                                            <input type="number" @bind="_stockQuantities[stock.Ticker]" min="1" max="@stock.AvailableShares"
                                                    class="form-control form-control-sm" style="width: 60px;" />
-                                            <button class="btn btn-sm btn-success" @onclick="() => BuyStock(stock.Ticker)">Купить</button>
+                                            <button class="btn btn-sm btn-success" @onclick="() => BuyStock(stock.Ticker)">@Loc["stock.buy"]</button>
                                             @if (playerShares > 0)
                                             {
-                                                <button class="btn btn-sm btn-warning" @onclick="() => SellStock(stock.Ticker)">Продать</button>
-                                                <button class="btn btn-sm btn-danger" @onclick="() => SellAllStock(stock.Ticker)" title="Продать всё">📤</button>
+                                                <button class="btn btn-sm btn-warning" @onclick="() => SellStock(stock.Ticker)">@Loc["stock.sell"]</button>
+                                                <button class="btn btn-sm btn-danger" @onclick="() => SellAllStock(stock.Ticker)" title="@Loc["stock.sell_all"]">📤</button>
                                             }
                                         </div>
-                                        <button class="btn btn-sm btn-outline-info" @onclick="() => ShowChart(stock)">📈 График</button>
+                                        <button class="btn btn-sm btn-outline-info" @onclick="() => ShowChart(stock)">@Loc["stock.chart"]</button>
                                     </div>
                                 </td>
                             </tr>
@@ -159,93 +161,106 @@
             </div>
         </div>
 
-        <!-- Price Chart -->
+        <!-- Price Chart Modal -->
         @if (_selectedStock != null && _selectedStock.PriceHistory.Any())
         {
-            <div class="card mb-3">
-                <div class="card-header bg-dark text-white d-flex justify-content-between">
-                    <h5 class="mb-0">📈 @_selectedStock.CompanyName (@_selectedStock.Ticker)</h5>
-                    <button class="btn btn-sm btn-outline-light" @onclick="() => _selectedStock = null">✕</button>
-                </div>
-                <div class="card-body p-2" style="background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);">
-                    @{
-                        var prices = _selectedStock.PriceHistory.ToList();
-                        var minPrice = prices.Min();
-                        var maxPrice = prices.Max();
-                        var priceRange = maxPrice - minPrice;
-                        if (priceRange == 0) priceRange = 1;
-                        
-                        var chartWidth = 600;
-                        var chartHeight = 200;
-                        var padding = 50;
-                        var graphWidth = chartWidth - padding * 2;
-                        var graphHeight = chartHeight - padding;
-                        
-                        var points = new List<string>();
-                        var areaPoints = new List<string>();
-                        areaPoints.Add($"{padding},{chartHeight - padding}");
-                        
-                        for (int i = 0; i < prices.Count; i++)
-                        {
-                            var x = padding + (i * graphWidth / Math.Max(1, prices.Count - 1));
-                            var y = chartHeight - padding - (int)(((double)(prices[i] - minPrice) / (double)priceRange) * graphHeight);
-                            points.Add($"{x},{y}");
-                            areaPoints.Add($"{x},{y}");
-                        }
-                        areaPoints.Add($"{padding + graphWidth},{chartHeight - padding}");
-                        
-                        var currentPrice = prices.LastOrDefault();
-                        var previousPrice = prices.Count > 1 ? prices[prices.Count - 2] : currentPrice;
-                        var trendColor = currentPrice > previousPrice ? "#28a745" : (currentPrice < previousPrice ? "#dc3545" : "#6c757d");
-                    }
-                    
-                    <div class="d-flex justify-content-between text-white mb-2 px-2">
-                        <span>Min: <strong class="text-danger">@minPrice.ToString("C")</strong></span>
-                        <span>Current: <strong style="color: @trendColor">@currentPrice.ToString("C")</strong></span>
-                        <span>Max: <strong class="text-success">@maxPrice.ToString("C")</strong></span>
-                    </div>
-                    
-                    <svg width="100%" viewBox="0 0 @chartWidth @chartHeight" style="max-width: 100%;">
-                        @for (int i = 0; i <= 4; i++)
-                        {
-                            var y = padding + (i * graphHeight / 4);
-                            <line x1="@padding" y1="@y" x2="@(chartWidth - padding)" y2="@y" 
-                                  stroke="rgba(255,255,255,0.1)" stroke-dasharray="5,5" />
-                        }
-                        
-                        <polygon points="@string.Join(" ", areaPoints)" 
-                                 fill="url(#stock-gradient-@_selectedStock.Ticker)" opacity="0.3" />
-                        
-                        <defs>
-                            <linearGradient id="stock-gradient-@_selectedStock.Ticker" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" style="stop-color: @trendColor; stop-opacity: 0.8" />
-                                <stop offset="100%" style="stop-color: @trendColor; stop-opacity: 0.1" />
-                            </linearGradient>
-                        </defs>
-                        
-                        <polyline points="@string.Join(" ", points)" 
-                                  fill="none" stroke="@trendColor" stroke-width="3" 
-                                  stroke-linecap="round" stroke-linejoin="round" />
-                        
-                        @for (int i = 0; i < prices.Count; i++)
-                        {
-                            var x = padding + (i * graphWidth / Math.Max(1, prices.Count - 1));
-                            var y = chartHeight - padding - (int)(((double)(prices[i] - minPrice) / (double)priceRange) * graphHeight);
-                            
-                            <circle cx="@x" cy="@y" r="3" fill="@trendColor" stroke="white" stroke-width="1" />
-                            
-                            @if (i == prices.Count - 1)
-                            {
-                                <circle cx="@x" cy="@y" r="6" fill="@trendColor" opacity="0.3">
-                                    <animate attributeName="r" values="6;10;6" dur="1.5s" repeatCount="indefinite" />
-                                </circle>
+            <div class="modal fade show" style="display: block; background-color: rgba(0, 0, 0, 0.65); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1" role="dialog">
+                <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+                    <div class="modal-content" style="background-color: #16213e; border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); border-radius: 12px; overflow: hidden;">
+                        <div class="modal-header text-white" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); background-color: #1a1a2e; padding: 1rem 1.5rem;">
+                            <h5 class="modal-title d-flex align-items-center">
+                                <span class="me-2">@_selectedStock.Emoji</span> @_selectedStock.CompanyName (@_selectedStock.Ticker) - @Loc["stock.chart"]
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" aria-label="Close" @onclick="() => _selectedStock = null"></button>
+                        </div>
+                        <div class="modal-body" style="padding: 1.5rem;">
+                            @{
+                                var prices = _selectedStock.PriceHistory.ToList();
+                                var minPrice = prices.Min();
+                                var maxPrice = prices.Max();
+                                var priceRange = maxPrice - minPrice;
+                                if (priceRange == 0) priceRange = 1;
+
+                                var chartWidth = 600;
+                                var chartHeight = 200;
+                                var padding = 50;
+                                var graphWidth = chartWidth - padding * 2;
+                                var graphHeight = chartHeight - padding;
+
+                                var points = new List<string>();
+                                var areaPoints = new List<string>();
+                                areaPoints.Add($"{padding},{chartHeight - padding}");
+
+                                for (int i = 0; i < prices.Count; i++)
+                                {
+                                    var x = padding + (i * graphWidth / Math.Max(1, prices.Count - 1));
+                                    var y = chartHeight - padding - (int)(((double)(prices[i] - minPrice) / (double)priceRange) * graphHeight);
+                                    points.Add($"{x},{y}");
+                                    areaPoints.Add($"{x},{y}");
+                                }
+                                areaPoints.Add($"{padding + graphWidth},{chartHeight - padding}");
+
+                                var currentPrice = prices.LastOrDefault();
+                                var previousPrice = prices.Count > 1 ? prices[prices.Count - 2] : currentPrice;
+                                var trendColor = currentPrice > previousPrice ? "#28a745" : (currentPrice < previousPrice ? "#dc3545" : "#6c757d");
                             }
-                        }
-                    </svg>
-                    
-                    <div class="d-flex justify-content-between px-4 text-muted small">
-                        <span>← Oldest</span>
-                        <span>Latest →</span>
+
+                            <div class="card" style="border: none; background: transparent;">
+                                <div class="card-body p-0">
+                                    <div class="d-flex justify-content-between text-white mb-3 px-2">
+                                        <span>@Loc["stock.chart_min"]: <strong class="text-danger">@minPrice.ToString("C")</strong></span>
+                                        <span>@Loc["stock.chart_current"]: <strong style="color: @trendColor">@currentPrice.ToString("C")</strong></span>
+                                        <span>@Loc["stock.chart_max"]: <strong class="text-success">@maxPrice.ToString("C")</strong></span>
+                                    </div>
+
+                                    <svg width="100%" viewBox="0 0 @chartWidth @chartHeight" style="max-width: 100%; height: auto; display: block;">
+                                        @for (int i = 0; i <= 4; i++)
+                                        {
+                                            var y = padding + (i * graphHeight / 4);
+                                            <line x1="@padding" y1="@y" x2="@(chartWidth - padding)" y2="@y"
+                                                  stroke="rgba(255,255,255,0.1)" stroke-dasharray="5,5" />
+                                        }
+
+                                        <polygon points="@string.Join(" ", areaPoints)"
+                                                 fill="url(#stock-gradient-@_selectedStock.Ticker)" opacity="0.25" />
+
+                                        <defs>
+                                            <linearGradient id="stock-gradient-@_selectedStock.Ticker" x1="0%" y1="0%" x2="0%" y2="100%">
+                                                <stop offset="0%" style="stop-color: @trendColor; stop-opacity: 0.8" />
+                                                <stop offset="100%" style="stop-color: @trendColor; stop-opacity: 0.05" />
+                                            </linearGradient>
+                                        </defs>
+
+                                        <polyline points="@string.Join(" ", points)"
+                                                  fill="none" stroke="@trendColor" stroke-width="3"
+                                                  stroke-linecap="round" stroke-linejoin="round" />
+
+                                        @for (int i = 0; i < prices.Count; i++)
+                                        {
+                                            var x = padding + (i * graphWidth / Math.Max(1, prices.Count - 1));
+                                            var y = chartHeight - padding - (int)(((double)(prices[i] - minPrice) / (double)priceRange) * graphHeight);
+
+                                            <circle cx="@x" cy="@y" r="3" fill="@trendColor" stroke="white" stroke-width="1" />
+
+                                            @if (i == prices.Count - 1)
+                                            {
+                                                <circle cx="@x" cy="@y" r="6" fill="@trendColor" opacity="0.3">
+                                                    <animate attributeName="r" values="6;10;6" dur="1.5s" repeatCount="indefinite" />
+                                                </circle>
+                                            }
+                                        }
+                                    </svg>
+
+                                    <div class="d-flex justify-content-between px-4 text-muted small mt-2">
+                                        <span>@Loc["stock.oldest"]</span>
+                                        <span>@Loc["stock.latest"]</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer" style="border-top: 1px solid rgba(255, 255, 255, 0.1); background-color: #1a1a2e; padding: 0.75rem 1.5rem;">
+                            <button type="button" class="btn btn-outline-light btn-sm" @onclick="() => _selectedStock = null">@Loc["common.close"]</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -256,17 +271,17 @@
         {
             <div class="card mb-3">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">💼 Мой портфель</h5>
+                    <h5 class="mb-0">@Loc["stock.my_portfolio"]</h5>
                 </div>
                 <div class="card-body p-0">
                     <table class="table table-striped mb-0">
                         <thead class="table-dark">
                             <tr>
-                                <th>Тикер</th>
-                                <th>Акций</th>
-                                <th>Ср. цена покупки</th>
-                                <th>Текущая цена</th>
-                                <th>Стоимость</th>
+                                <th>@Loc["stock.ticker"]</th>
+                                <th>@Loc["stock.shares"]</th>
+                                <th>@Loc["stock.avg_buy"]</th>
+                                <th>@Loc["stock.current_price"]</th>
+                                <th>@Loc["stock.value"]</th>
                                 <th>P&L</th>
                             </tr>
                         </thead>
@@ -279,7 +294,7 @@
                                 var value = stock.SharePrice * holding.Value;
                                 var holdPnl = (stock.SharePrice - avgBuy) * holding.Value;
                                 var holdPnlColor = holdPnl >= 0 ? "text-success" : "text-danger";
-                                
+
                                 <tr>
                                     <td><strong>@stock.Emoji @holding.Key</strong></td>
                                     <td>@holding.Value</td>
@@ -300,17 +315,17 @@
         {
             <div class="card mb-3">
                 <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0">⏳ Отложенные ордера</h5>
+                    <h5 class="mb-0">@Loc["stock.pending_orders"]</h5>
                 </div>
                 <div class="card-body p-0">
                     <table class="table table-striped mb-0">
                         <thead>
                             <tr>
-                                <th>Тикер</th>
-                                <th>Тип</th>
-                                <th>Действие</th>
-                                <th>Цена</th>
-                                <th>Кол-во</th>
+                                <th>@Loc["stock.ticker"]</th>
+                                <th>@Loc["stock.type"]</th>
+                                <th>@Loc["stock.action"]</th>
+                                <th>@Loc["stock.price"]</th>
+                                <th>@Loc["stock.qty_short"]</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -320,18 +335,18 @@
                                 <tr>
                                     <td><strong>@order.Ticker</strong></td>
                                     <td>
-                                        @(order.Type switch 
+                                        @(order.Type switch
                                         {
-                                            OrderType.Limit => "Лимит",
-                                            OrderType.StopLoss => "Стоп-лосс",
-                                            _ => "Рыночный"
+                                            OrderType.Limit => Loc["stock.order_limit"],
+                                            OrderType.StopLoss => Loc["stock.order_stoploss"],
+                                            _ => Loc["stock.order_market"]
                                         })
                                     </td>
-                                    <td>@(order.IsBuy ? "🟢 Купить" : "🔴 Продать")</td>
+                                    <td>@(order.IsBuy ? Loc["stock.buy_green"] : Loc["stock.sell_red"])</td>
                                     <td>@order.TargetPrice.ToString("C")</td>
                                     <td>@order.Quantity</td>
                                     <td>
-                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelOrder(order.OrderId)">Отмена</button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelOrder(order.OrderId)">@Loc["stock.cancel"]</button>
                                     </td>
                                 </tr>
                             }
@@ -344,12 +359,12 @@
         <!-- Limit Order Form -->
         <div class="card">
             <div class="card-header bg-secondary text-white">
-                <h5 class="mb-0">📝 Создать ордер</h5>
+                <h5 class="mb-0">@Loc["stock.create_order"]</h5>
             </div>
             <div class="card-body">
                 <div class="row g-2 align-items-end">
                     <div class="col-md-2">
-                        <label class="form-label small">Тикер</label>
+                        <label class="form-label small">@Loc["stock.ticker"]</label>
                         <select @bind="_orderTicker" class="form-select form-select-sm">
                             @foreach (var stock in StockMarketService.Stocks)
                             {
@@ -358,29 +373,29 @@
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label small">Тип</label>
+                        <label class="form-label small">@Loc["stock.type"]</label>
                         <select @bind="_orderType" class="form-select form-select-sm">
-                            <option value="Limit">Лимитный</option>
-                            <option value="StopLoss">Стоп-лосс</option>
+                            <option value="Limit">@Loc["stock.order_limit_opt"]</option>
+                            <option value="StopLoss">@Loc["stock.order_stoploss"]</option>
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label small">Действие</label>
+                        <label class="form-label small">@Loc["stock.action"]</label>
                         <select @bind="_orderIsBuy" class="form-select form-select-sm">
-                            <option value="true">Купить</option>
-                            <option value="false">Продать</option>
+                            <option value="true">@Loc["stock.buy"]</option>
+                            <option value="false">@Loc["stock.sell"]</option>
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label small">Цена</label>
+                        <label class="form-label small">@Loc["stock.price"]</label>
                         <input type="number" @bind="_orderPrice" step="0.01" class="form-control form-control-sm" />
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label small">Кол-во</label>
+                        <label class="form-label small">@Loc["stock.qty_short"]</label>
                         <input type="number" @bind="_orderQuantity" min="1" class="form-control form-control-sm" />
                     </div>
                     <div class="col-md-2">
-                        <button class="btn btn-primary btn-sm w-100" @onclick="PlaceOrder">Разместить</button>
+                        <button class="btn btn-primary btn-sm w-100" @onclick="PlaceOrder">@Loc["stock.place"]</button>
                     </div>
                 </div>
             </div>
@@ -404,6 +419,18 @@
     private decimal _orderPrice = 0;
     private int _orderQuantity = 10;
 
+    protected override void OnInitialized()
+    {
+        Loc.OnLanguageChanged += Refresh;
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= Refresh;
+    }
+
     protected override void OnParametersSet()
     {
         foreach (var stock in StockMarketService.Stocks)
@@ -420,7 +447,8 @@
         if (Player == null) return;
         var quantity = _stockQuantities.GetValueOrDefault(ticker, 10);
         _message = StockMarketService.BuyStock(Player, ticker, quantity);
-        _messageClass = _message.StartsWith("Куплено") ? "alert-success" : "alert-danger";
+        // Service messages are still in Russian; detect success by Russian stems
+        _messageClass = _message.StartsWith("Куплено") || _message.StartsWith("Bought") ? "alert-success" : "alert-danger";
         StateHasChanged();
     }
 
@@ -429,7 +457,7 @@
         if (Player == null) return;
         var quantity = _stockQuantities.GetValueOrDefault(ticker, 10);
         _message = StockMarketService.SellStock(Player, ticker, quantity);
-        _messageClass = _message.StartsWith("Продано") ? "alert-success" : "alert-danger";
+        _messageClass = _message.StartsWith("Продано") || _message.StartsWith("Sold") ? "alert-success" : "alert-danger";
         StateHasChanged();
     }
 
@@ -439,13 +467,13 @@
         var shares = Player.Portfolio.Holdings.GetValueOrDefault(ticker, 0);
         if (shares <= 0)
         {
-            _message = "Нет акций для продажи!";
+            _message = Loc["stock.no_shares_to_sell"];
             _messageClass = "alert-danger";
             StateHasChanged();
             return;
         }
         _message = StockMarketService.SellStock(Player, ticker, shares);
-        _messageClass = _message.StartsWith("Продано") ? "alert-success" : "alert-danger";
+        _messageClass = _message.StartsWith("Продано") || _message.StartsWith("Sold") ? "alert-success" : "alert-danger";
         StateHasChanged();
     }
 
@@ -461,7 +489,7 @@
         var orderType = _orderType == "Limit" ? OrderType.Limit : OrderType.StopLoss;
         var isBuy = _orderIsBuy == "true";
         _message = StockMarketService.PlaceOrder(Player, _orderTicker, orderType, _orderPrice, _orderQuantity, isBuy);
-        _messageClass = _message.Contains("создан") ? "alert-success" : "alert-danger";
+        _messageClass = _message.Contains("создан") || _message.Contains("placed") ? "alert-success" : "alert-danger";
         StateHasChanged();
     }
 

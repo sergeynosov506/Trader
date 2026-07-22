@@ -25,7 +25,32 @@ namespace EconomicGame.Services
         private readonly CorporateActionService _actionService;
         private readonly InsuranceService _insuranceService;
         private readonly StockMarketService _stockMarketService;
-        
+        private readonly ScenarioService _scenarioService;
+
+        /// <summary>
+        /// Scenarios defined in appsettings.json -> "Scenarios". Immutable at runtime.
+        /// </summary>
+        public IReadOnlyList<Scenario> Scenarios { get; }
+
+        public ScenarioService ScenarioService => _scenarioService;
+
+        /// <summary>
+        /// Start a scenario WITH bot rivals (bot-competitors feature): passes the AI
+        /// population and market snapshot so the race can be set up fairly.
+        /// </summary>
+        public bool StartScenarioRace(Player player, string scenarioId)
+        {
+            var ok = _scenarioService.StartScenario(player, scenarioId, CurrentTime, _playerService.GetAllPlayers(), _exchange.Items);
+            if (ok && player.ScenarioRivalIds.Any())
+            {
+                var rivalNames = _playerService.GetAllPlayers()
+                    .Where(p => player.ScenarioRivalIds.Contains(p.Id))
+                    .Select(p => p.Name);
+                LogActivity($"🏁 {player.Name} начал сценарий-гонку! Соперники: {string.Join(", ", rivalNames)}");
+            }
+            return ok;
+        }
+
         // Thread-safe activity log
         private readonly object _logLock = new();
         private readonly List<string> _activityLog = new();
@@ -44,13 +69,13 @@ namespace EconomicGame.Services
 
         public StockMarketService StockMarket => _stockMarketService;
 
-        public GameEngine(IHubContext<GameHub> hubContext, IConfiguration configuration, PlayerService playerService, SyncEngine syncEngine, CorporateRivalryService rivalryService, CorporateActionService actionService, InsuranceService insuranceService, StockMarketService stockMarketService)
+        public GameEngine(IHubContext<GameHub> hubContext, IConfiguration configuration, PlayerService playerService, SyncEngine syncEngine, CorporateRivalryService rivalryService, CorporateActionService actionService, InsuranceService insuranceService, StockMarketService stockMarketService, ScenarioService scenarioService)
         {
             _market = new Market();
-            
+
             var items = configuration.GetSection("MarketItems").Get<List<MarketItem>>() ?? new List<MarketItem>();
             _exchange = new StockExchange(items);
-            
+
             _bank = new Bank();
             _news = new List<News>();
             _hubContext = hubContext;
@@ -60,6 +85,10 @@ namespace EconomicGame.Services
             _actionService = actionService;
             _insuranceService = insuranceService;
             _stockMarketService = stockMarketService;
+            _scenarioService = scenarioService;
+
+            Scenarios = configuration.GetSection("Scenarios").Get<List<Scenario>>() ?? new List<Scenario>();
+            _scenarioService.LoadScenarios(Scenarios, _bank);
         }
 
         public DateTime CurrentTime { get; private set; } = DateTime.Today.AddHours(8); // Start at 8 AM
@@ -77,21 +106,37 @@ namespace EconomicGame.Services
             OnStateChanged?.Invoke();
         }
 
+        /// <summary>
+        /// True while the human player has the bar (or poker room) open —
+        /// game time flows slower so an evening at the bar actually lasts an evening.
+        /// Set by BarView/PokerView on enter/leave.
+        /// </summary>
+        public bool PlayerInBarZone { get; set; }
+
         public void UpdateGameState()
         {
             var previousTime = CurrentTime;
-            CurrentTime = CurrentTime.AddMinutes(15); // Advance time
+            // Time dilation: the world slows down while you're at the bar
+            CurrentTime = CurrentTime.AddMinutes(PlayerInBarZone ? GameConstants.BarTickMinutes : GameConstants.NormalTickMinutes);
 
             // Night Cycle / Collective Intelligence Sync
             if (previousTime.Hour == 23 && CurrentTime.Hour == 0)
             {
                 LogActivity("Collective Consciousness Sync Initiated...");
                 _syncEngine.PerformNightlySync();
+                RefillBarBankroll();
+
+                // Living in your car has consequences — every night without a home
+                foreach (var p in _playerService.GetAllPlayers())
+                {
+                    ProcessHomelessNight(p);
+                }
             }
 
             _exchange.UpdatePrices();
-            
-            // Stock Market updates
+
+            // Stock Market updates — ensure service uses game time for market-hours checks
+            _stockMarketService.CurrentGameTime = CurrentTime;
             _stockMarketService.UpdateStockPrices(_exchange.Items);
             _stockMarketService.ProcessPendingOrders();
             _stockMarketService.PayDividends(CurrentTime);
@@ -105,8 +150,36 @@ namespace EconomicGame.Services
             GenerateRandomEvents();
             ProcessExpiredEvents();
             
-            // Banking Updates
+            // Banking Updates — global, run once per tick
             _bank.UpdateInterestRate();
+
+            // Corporate Rivalry updates — global, don't run every tick
+            if (_random.NextDouble() < 0.05) // 5% chance per tick to recalculate rivals
+            {
+                _rivalryService.UpdateRivals();
+            }
+
+            // Shadow Operations maintenance — global, run once per tick
+            foreach (var p in _playerService.GetAllPlayers())
+            {
+                if (p.IsSabotaged && p.SabotageEndTime.HasValue && CurrentTime >= p.SabotageEndTime.Value)
+                {
+                    p.IsSabotaged = false;
+                    p.SabotageEndTime = null;
+                }
+            }
+
+            // Subsidiary payouts — global, don't run every tick
+            if (_random.NextDouble() < 0.02) // 2% chance per tick for subsidiary payouts
+            {
+                _actionService.ProcessSubsidaryPayouts();
+            }
+
+            // Human-player-only services (don't need to run N times for N AI players)
+            _insuranceService.UpdateInsuranceStatus(CurrentTime);
+
+            // Per-player updates — run once per player
+            var currentDay = (int)(CurrentTime - DateTime.Today.AddHours(8)).TotalDays;
             foreach (var player in _playerService.GetAllPlayers())
             {
                 _bank.CheckLoans(player, CurrentTime);
@@ -117,40 +190,39 @@ namespace EconomicGame.Services
                 ProcessFactoryMaintenance(player);
                 ProcessOverloadPenalty(player);
                 ProcessAutoProduction(player);
-                
-                // Corporate Rivalry updates (don't run every tick)
-                if (_random.NextDouble() < 0.05) // 5% chance per tick to recalculate rivals
-                {
-                    _rivalryService.UpdateRivals();
-                }
+                ProcessAgriculturalGrowth(player);
 
-                // Phase 7: Shadow Operations maintenance
-                foreach (var p in _playerService.GetAllPlayers())
+                // Evaluate any active scenario — only for human players,
+                // AI don't participate in challenges.
+                if (!player.IsAI && player.ScenarioStatus == ScenarioStatus.Active)
                 {
-                    if (p.IsSabotaged && p.SabotageEndTime.HasValue && CurrentTime >= p.SabotageEndTime.Value)
+                    var prev = player.ScenarioStatus;
+                    var next = _scenarioService.EvaluateScenario(player, CurrentTime, _exchange.Items, _playerService.GetAllPlayers());
+                    if (next != prev)
                     {
-                        p.IsSabotaged = false;
-                        p.SabotageEndTime = null;
+                        var s = _scenarioService.GetActiveScenario(player);
+                        var name = s?.Id ?? "?";
+                        if (next == ScenarioStatus.Lost && player.ScenarioRaceWinner != null)
+                        {
+                            LogActivity($"🏁 {player.ScenarioRaceWinner} выиграл гонку в сценарии '{name}' — {player.Name} опоздал!");
+                        }
+                        else
+                        {
+                            LogActivity(next == ScenarioStatus.Won
+                                ? $"Scenario '{name}' WON by {player.Name}"
+                                : $"Scenario '{name}' LOST by {player.Name}");
+                        }
                     }
                 }
 
-                if (_random.NextDouble() < 0.02) // 2% chance per tick for subsidiary payouts
-                {
-                    _actionService.ProcessSubsidaryPayouts();
-                }
-
-                _insuranceService.UpdateInsuranceStatus(CurrentTime);
-
-                OnStateChanged?.Invoke();
                 // Generate monthly report every N game days
-                var currentDay = (int)(CurrentTime - DateTime.Today.AddHours(8)).TotalDays;
                 if (currentDay > 0 && currentDay % GameConstants.MonthlyReportDays == 0 && player.LastReportMonth != currentDay)
                 {
                     GenerateMonthlyReport(player, currentDay);
                 }
             }
-            
-            // Notify local subscribers (Server-side Blazor components)
+
+            // Notify local subscribers (Server-side Blazor components) — once per tick
             OnStateChanged?.Invoke();
 
             // Notify external clients (if any)
@@ -160,7 +232,7 @@ namespace EconomicGame.Services
 
         #region Logging
 
-        private void LogActivity(string message)
+        public void LogActivity(string message)
         {
             lock (_logLock)
             {
@@ -238,7 +310,11 @@ namespace EconomicGame.Services
             (FactoryType.SteelMill, "Сталелитейный цех", "🏗️", GameConstants.SteelMillPrice, GameConstants.SteelMillMaintenance, "Оборудование"),
             (FactoryType.ChemicalPlant, "Химический завод", "🧪", GameConstants.ChemicalPlantPrice, GameConstants.ChemicalPlantMaintenance, "Химикаты"),
             (FactoryType.TextileMill, "Текстильная фабрика", "🧵", GameConstants.TextileMillPrice, GameConstants.TextileMillMaintenance, "Текстиль"),
-            (FactoryType.PharmLab, "Фармацевтическая лаборатория", "💊", GameConstants.PharmLabPrice, GameConstants.PharmLabMaintenance, "Фармацевтика")
+            (FactoryType.PharmLab, "Фармацевтическая лаборатория", "💊", GameConstants.PharmLabPrice, GameConstants.PharmLabMaintenance, "Фармацевтика"),
+            
+            (FactoryType.SugarCanePlantation, "Плантация тростника", "🎋", 80000m, 1200m, "Сахарный тростник"),
+            (FactoryType.CoffeePlantation, "Кофейная плантация", "☕", 120000m, 1800m, "Кофе-бобы"),
+            (FactoryType.WheatFarm, "Пшеничная ферма", "🌾", 40000m, 600m, "Пшеница")
         };
 
         public string BuyVehicle(Player player, VehicleType vehicleType)
@@ -248,22 +324,11 @@ namespace EconomicGame.Services
             var vehicleInfo = AvailableVehicles.FirstOrDefault(v => v.Type == vehicleType);
             if (vehicleInfo == default) return "Такого транспорта нет!";
 
-            if (player.Vehicle != null)
-            {
-                // Trade-in: sell current for 60%
-                var tradeInValue = player.Vehicle.PurchasePrice * 0.6m;
-                if (player.Money + tradeInValue < vehicleInfo.Price)
-                    return $"Не хватает денег! Нужно {vehicleInfo.Price:C}, у тебя {player.Money:C} + trade-in {tradeInValue:C}";
-                
-                player.Money += tradeInValue;
-                LogActivity($"{player.Name} сдал {player.Vehicle.Name} в trade-in за {tradeInValue:C}");
-            }
-
             if (player.Money < vehicleInfo.Price)
-                return $"Не хватает денег! Нужно {vehicleInfo.Price:C}";
+                return $"Не хватает денег! Нужно {vehicleInfo.Price:C}, у тебя {player.Money:C}";
 
             player.Money -= vehicleInfo.Price;
-            player.Vehicle = new Vehicle
+            var newVehicle = new Vehicle
             {
                 Type = vehicleType,
                 Name = vehicleInfo.Name,
@@ -273,31 +338,50 @@ namespace EconomicGame.Services
                 IsOperational = true,
                 PurchaseDate = CurrentTime
             };
+            player.Vehicles.Add(newVehicle);
 
             LogActivity($"{player.Name} купил {vehicleInfo.Emoji} {vehicleInfo.Name} за {vehicleInfo.Price:C}");
             OnStateChanged?.Invoke();
             return $"Поздравляем! {vehicleInfo.Emoji} {vehicleInfo.Name} теперь твой! Вместимость: {vehicleInfo.Capacity} ед.";
         }
 
-        public string SellVehicle(Player player)
+        public string SellVehicle(Player player, Vehicle vehicle)
         {
-            if (player?.Vehicle == null) return "У тебя нет транспорта!";
+            if (player == null) return "Игрок не найден!";
+            if (vehicle == null) return "Транспорт не найден!";
+            if (!player.Vehicles.Contains(vehicle)) return "У тебя нет этого транспорта!";
 
-            var sellPrice = player.Vehicle.PurchasePrice * 0.6m;
-            var vehicleName = $"{player.Vehicle.Emoji} {player.Vehicle.Name}";
+            var currentCargo = player.Inventory.Sum(i => i.Quantity);
+            var newCapacity = player.TotalCargoCapacity - vehicle.CargoCapacity;
+            if (currentCargo > newCapacity)
+            {
+                return $"Нельзя продать этот транспорт! Твой груз ({currentCargo} ед.) превысит новую общую вместимость ({newCapacity} ед.). Сначала продай товары или арендуй склад.";
+            }
+
+            var sellPrice = vehicle.PurchasePrice * 0.6m;
+            var vehicleName = $"{vehicle.Emoji} {vehicle.Name}";
 
             player.Money += sellPrice;
-            player.Vehicle = null;
+            player.Vehicles.Remove(vehicle);
 
             LogActivity($"{player.Name} продал {vehicleName} за {sellPrice:C}");
             OnStateChanged?.Invoke();
-            return $"Продал {vehicleName} за {sellPrice:C}";
+            return $"Продал {vehicleName} за {sellPrice:C} (60% от цены покупки)";
+        }
+
+        public string SellVehicle(Player player)
+        {
+            if (player == null) return "Игрок не найден!";
+            var vehicle = player.Vehicles.FirstOrDefault();
+            if (vehicle == null) return "У тебя нет транспорта!";
+            return SellVehicle(player, vehicle);
         }
 
         public string BuyLand(Player player, LandType landType)
         {
             if (player == null) return "Игрок не найден!";
-            if (player.Land != null) return $"У тебя уже есть участок: {player.Land.Name}. Сначала продай его!";
+            if (player.Lands.Count >= player.MaxLandPlots)
+                return $"Достигнут лимит земельных участков ({player.MaxLandPlots})! Купи торговую лицензию для расширения.";
 
             var landInfo = AvailableLand.FirstOrDefault(l => l.Type == landType);
             if (landInfo == default) return "Такого участка нет!";
@@ -306,8 +390,9 @@ namespace EconomicGame.Services
                 return $"Не хватает денег! Нужно {landInfo.Price:C}";
 
             player.Money -= landInfo.Price;
-            player.Land = new Land
+            var newLand = new Land
             {
+                Id = Guid.NewGuid(),
                 Type = landType,
                 Name = landInfo.Name,
                 Emoji = landInfo.Emoji,
@@ -315,6 +400,7 @@ namespace EconomicGame.Services
                 PurchaseDate = CurrentTime,
                 MaxWarehouseLevel = landInfo.MaxWarehouse
             };
+            player.Lands.Add(newLand);
 
             LogActivity($"{player.Name} купил {landInfo.Emoji} {landInfo.Name} за {landInfo.Price:C}");
             OnStateChanged?.Invoke();
@@ -323,14 +409,44 @@ namespace EconomicGame.Services
 
         public string SellLand(Player player)
         {
-            if (player?.Land == null) return "У тебя нет земельного участка!";
-            if (player.Warehouses.Any()) return "Сначала продай все склады!";
+            if (player == null) return "Игрок не найден!";
+            var land = player.Lands.FirstOrDefault();
+            if (land == null) return "У тебя нет земельного участка!";
+            return SellLand(player, land.Id);
+        }
 
-            var sellPrice = player.Land.PurchasePrice * 0.7m;
-            var landName = $"{player.Land.Emoji} {player.Land.Name}";
+        public string SellLand(Player player, Guid landId)
+        {
+            if (player == null) return "Игрок не найден!";
+            var land = player.Lands.FirstOrDefault(l => l.Id == landId);
+            if (land == null) return "У тебя нет такого земельного участка!";
+
+            // Smart validation: Remaining plots must support all existing warehouses
+            var remainingLands = player.Lands.Where(l => l.Id != landId).ToList();
+            
+            // If we have warehouses but no lands left
+            if (player.Warehouses.Any() && !remainingLands.Any())
+                return "Нельзя продать последний участок! Сначала продай все склады.";
+
+            // If we have factories but no lands left
+            if (player.Factories.Any() && !remainingLands.Any())
+                return "Нельзя продать последний участок! Сначала продай все заводы.";
+
+            foreach (var wh in player.Warehouses)
+            {
+                var whInfo = AvailableWarehouses.FirstOrDefault(w => w.Type == wh.Type);
+                var reqLevel = whInfo != default ? whInfo.RequiredLandLevel : 1;
+                if (!remainingLands.Any(l => l.MaxWarehouseLevel >= reqLevel))
+                {
+                    return $"Нельзя продать этот участок! Твой склад ({wh.Emoji} {wh.Name}) требует участок уровня {reqLevel}+, который не поддерживается оставшимися участками.";
+                }
+            }
+
+            var sellPrice = land.PurchasePrice * 0.7m;
+            var landName = $"{land.Emoji} {land.Name}";
 
             player.Money += sellPrice;
-            player.Land = null;
+            player.Lands.Remove(land);
 
             LogActivity($"{player.Name} продал {landName} за {sellPrice:C}");
             OnStateChanged?.Invoke();
@@ -340,7 +456,7 @@ namespace EconomicGame.Services
         public string BuyWarehouse(Player player, WarehouseType warehouseType)
         {
             if (player == null) return "Игрок не найден!";
-            if (player.Land == null) return "Сначала купи земельный участок!";
+            if (!player.Lands.Any()) return "Сначала купи земельный участок!";
             
             // Check warehouse limit based on trading license
             if (player.Warehouses.Count >= player.MaxWarehouses)
@@ -349,8 +465,8 @@ namespace EconomicGame.Services
             var warehouseInfo = AvailableWarehouses.FirstOrDefault(w => w.Type == warehouseType);
             if (warehouseInfo == default) return "Такого склада нет!";
 
-            if (player.Land.MaxWarehouseLevel < warehouseInfo.RequiredLandLevel)
-                return $"Твой участок слишком мал для этого склада! Нужен участок уровня {warehouseInfo.RequiredLandLevel}+";
+            if (!player.Lands.Any(l => l.MaxWarehouseLevel >= warehouseInfo.RequiredLandLevel))
+                return $"Твои участки слишком малы для этого склада! Нужен участок уровня {warehouseInfo.RequiredLandLevel}+";
 
             if (player.Money < warehouseInfo.Price)
                 return $"Не хватает денег! Нужно {warehouseInfo.Price:C}";
@@ -376,7 +492,7 @@ namespace EconomicGame.Services
         public string BuyFactory(Player player, FactoryType factoryType)
         {
             if (player == null) return "Игрок не найден!";
-            if (player.Land == null) return "Сначала купи земельный участок!";
+            if (!player.Lands.Any()) return "Сначала купи земельный участок!";
             
             var factoryInfo = AvailableFactories.FirstOrDefault(f => f.Type == factoryType);
             if (factoryInfo == default) return "Такого завода нет!";
@@ -413,7 +529,7 @@ namespace EconomicGame.Services
             if (warehouse == null) return "Склад не найден!";
 
             // Check if remaining capacity would be enough
-            var remainingCapacity = (player.Vehicle?.CargoCapacity ?? 0) + player.Warehouses.Where(w => w.WarehouseId != warehouse.WarehouseId).Sum(w => w.Capacity);
+            var remainingCapacity = player.Vehicles.Sum(v => v.CargoCapacity) + player.Warehouses.Where(w => w.WarehouseId != warehouse.WarehouseId).Sum(w => w.Capacity);
             if (player.CurrentCargoUsed > remainingCapacity)
                 return $"На складах товары! Продай товар или купи транспорт побольше.";
 
@@ -446,7 +562,7 @@ namespace EconomicGame.Services
                     else
                     {
                         // Can't pay - lose warehouse but keep goods if capacity allows
-                        var remainingCapacity = (player.Vehicle?.CargoCapacity ?? 0) + 
+                        var remainingCapacity = player.Vehicles.Sum(v => v.CargoCapacity) + 
                             player.Warehouses.Where(w => w.WarehouseId != warehouse.WarehouseId).Sum(w => w.Capacity);
                         if (player.CurrentCargoUsed <= remainingCapacity)
                         {
@@ -488,6 +604,92 @@ namespace EconomicGame.Services
                         }
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Harvest-cycle agriculture (economy rebalance): a plantation ripens for N game days
+        /// and yields one harvest, instead of dripping resources every tick.
+        /// Diseases can strike mid-cycle; they are auto-cured at harvest if the owner
+        /// has enough Chemicals in stock, otherwise the yield is slashed.
+        /// </summary>
+        private void ProcessAgriculturalGrowth(Player player)
+        {
+            if (player.Factories == null || !player.Factories.Any()) return;
+
+            foreach (var factory in player.Factories)
+            {
+                if (!factory.IsOperational) continue;
+
+                (string? rawItemName, int cycleDays, int cycleYield) = factory.Type switch
+                {
+                    FactoryType.SugarCanePlantation => ("SugarCane", GameConstants.SugarCaneCycleDays, GameConstants.SugarCaneCycleYield),
+                    FactoryType.CoffeePlantation => ("CoffeeBeans", GameConstants.CoffeeCycleDays, GameConstants.CoffeeCycleYield),
+                    FactoryType.WheatFarm => ("Wheat", GameConstants.WheatCycleDays, GameConstants.WheatCycleYield),
+                    _ => (null, 0, 0)
+                };
+
+                if (rawItemName == null) continue;
+
+                // Start the first cycle lazily (also covers factories from old saves)
+                factory.CurrentCycleStart ??= CurrentTime;
+
+                // Disease can strike mid-cycle. Per-tick chance is derived from the
+                // per-cycle chance spread across all ticks of the cycle (96 ticks per game day).
+                if (!factory.IsDiseased)
+                {
+                    double perTickDiseaseChance = GameConstants.CropDiseaseChancePerCycle / (cycleDays * 96.0);
+                    if (_random.NextDouble() < perTickDiseaseChance)
+                    {
+                        factory.IsDiseased = true;
+                        LogActivity($"🦠 [Агро] Болезнь поразила {factory.Name}! Запасись химикатами ({GameConstants.CropCureChemicalsCost} шт.) до сбора урожая, иначе потеряешь часть урожая.");
+                    }
+                }
+
+                // Not ripe yet?
+                if ((CurrentTime - factory.CurrentCycleStart.Value).TotalDays < cycleDays) continue;
+
+                int grownQty = cycleYield * Math.Max(1, factory.ProductionLevel);
+
+                // Handle disease at harvest: auto-cure with Chemicals if available
+                if (factory.IsDiseased)
+                {
+                    var chemicals = player.Inventory.FirstOrDefault(i => i.ItemName == GameConstants.Chemicals);
+                    if (chemicals != null && chemicals.Quantity >= GameConstants.CropCureChemicalsCost)
+                    {
+                        chemicals.Quantity -= GameConstants.CropCureChemicalsCost;
+                        if (chemicals.Quantity <= 0) player.Inventory.Remove(chemicals);
+                        LogActivity($"🧪 [Агро] {player.Name} вылечил урожай на {factory.Name} химикатами — урожай спасён!");
+                    }
+                    else
+                    {
+                        var survivalFactor = 0.3 + _random.NextDouble() * 0.4; // 30-70% of yield survives
+                        grownQty = (int)(grownQty * survivalFactor);
+                        LogActivity($"🦠 [Агро] Болезнь уничтожила часть урожая на {factory.Name} — собрано лишь {grownQty} ед.");
+                    }
+                    factory.IsDiseased = false;
+                }
+
+                int space = player.AvailableCargoSpace;
+                int actualGrown = Math.Min(grownQty, Math.Max(0, space));
+                if (actualGrown > 0)
+                {
+                    var marketItem = ExchangeItems.FirstOrDefault(i => i.Name == rawItemName);
+                    var price = marketItem?.CurrentPrice ?? 50m;
+                    player.Inventory.AddOrUpdateItem(rawItemName, price, actualGrown);
+                    LogActivity($"🌾 [Агро] Урожай собран на {factory.Name}: +{actualGrown} ед. {rawItemName}");
+                    if (actualGrown < grownQty)
+                    {
+                        LogActivity($"⚠️ [Агро] {grownQty - actualGrown} ед. {rawItemName} сгнило — не хватило места на складах!");
+                    }
+                }
+                else if (grownQty > 0)
+                {
+                    LogActivity($"⚠️ [Агро] Урожай на {factory.Name} сгнил — некуда складывать! Освободи место на складах.");
+                }
+
+                // Start the next cycle
+                factory.CurrentCycleStart = CurrentTime;
             }
         }
 
@@ -569,6 +771,7 @@ namespace EconomicGame.Services
 
         private void ProcessAutoProduction(Player player)
         {
+            if (player.IsSabotaged) return; // Production stops when sabotaged
             if (player.AutoProductionRecipes == null || !player.AutoProductionRecipes.Any()) return;
             if (!player.Warehouses.Any()) return;
 
@@ -577,36 +780,102 @@ namespace EconomicGame.Services
                 var recipe = ProductionRecipes.AllRecipes.FirstOrDefault(r => r.RecipeId == recipeId);
                 if (recipe == null) continue;
 
-                // Check resources
-                bool hasResources = true;
+                // --- Recipes take real time now (economy rebalance) ---
+                // ProductionTime is measured in ticks (1 tick = 15 game minutes).
+                // Progress accumulates every tick; the batch executes only when the cycle completes.
+                int progress = player.AutoProductionProgress.GetValueOrDefault(recipeId) + 1;
+                if (progress < recipe.ProductionTime)
+                {
+                    player.AutoProductionProgress[recipeId] = progress;
+                    continue;
+                }
+                // Hold the completed cycle until a batch actually runs (e.g. waiting for inputs),
+                // so scarce resources don't silently waste a whole cycle.
+                player.AutoProductionProgress[recipeId] = recipe.ProductionTime;
+
+                // Find upgrade level
+                int level = 1;
+                if (player.AutoProductionLevels != null && player.AutoProductionLevels.TryGetValue(recipeId, out int val))
+                {
+                    level = val;
+                }
+                
+                // Throughput multiplier based on level: Lvl 1=1x, Lvl 2=2x, Lvl 3=3x, Lvl 4=5x
+                int speedMultiplier = level switch
+                {
+                    2 => 2,
+                    3 => 3,
+                    4 => 5,
+                    _ => 1
+                };
+
+                // Determine maximum batches we can run (up to speedMultiplier) based on cash, resources, cargo, and max stock limits
+                int batches = speedMultiplier;
+
+                // 1. Cash constraint
+                if (recipe.ProductionCost > 0)
+                {
+                    int maxCashBatches = (int)(player.Money / recipe.ProductionCost);
+                    if (maxCashBatches < batches) batches = maxCashBatches;
+                }
+
+                // 2. Resource constraints
                 foreach (var input in recipe.Inputs)
                 {
                     var invItem = player.Inventory.FirstOrDefault(i => i.ItemName == input.Key);
-                    if (invItem == null || invItem.Quantity < input.Value)
+                    int minReserve = 0;
+                    if (player.AutoProductionMinReserves != null && player.AutoProductionMinReserves.TryGetValue(recipeId, out int valReserve))
                     {
-                        hasResources = false;
-                        break;
+                        minReserve = valReserve;
                     }
+
+                    int availableQty = (invItem != null) ? (invItem.Quantity - minReserve) : 0;
+                    if (availableQty < 0) availableQty = 0;
+
+                    int maxResourceBatches = availableQty / input.Value;
+                    if (maxResourceBatches < batches) batches = maxResourceBatches;
                 }
 
-                if (!hasResources) continue;
-
-                // Check money
-                if (player.Money < recipe.ProductionCost) continue;
-
-                // Check storage space
+                // 3. Storage space constraint
                 var outputTotal = recipe.Outputs.Sum(o => o.Value);
                 var inputTotal = recipe.Inputs.Sum(i => i.Value);
-                var netChange = outputTotal - inputTotal;
-                if (player.AvailableCargoSpace < netChange) continue;
+                var netChangePerBatch = outputTotal - inputTotal;
+                if (netChangePerBatch > 0)
+                {
+                    int maxSpaceBatches = (int)(player.AvailableCargoSpace / netChangePerBatch);
+                    if (maxSpaceBatches < batches) batches = maxSpaceBatches;
+                }
 
-                // Execute production
-                player.Money -= recipe.ProductionCost;
+                // 4. Max stock constraint
+                foreach (var output in recipe.Outputs)
+                {
+                    var invItem = player.Inventory.FirstOrDefault(i => i.ItemName == output.Key);
+                    int maxStock = int.MaxValue;
+                    if (player.AutoProductionMaxStock != null && player.AutoProductionMaxStock.TryGetValue(recipeId, out int valMax))
+                    {
+                        maxStock = valMax;
+                    }
+
+                    int currentQty = invItem?.Quantity ?? 0;
+                    int spaceToMax = maxStock - currentQty;
+                    if (spaceToMax < 0) spaceToMax = 0;
+
+                    int maxStockBatches = spaceToMax / output.Value;
+                    if (maxStockBatches < batches) batches = maxStockBatches;
+                }
+
+                if (batches <= 0) continue;
+
+                // A batch is actually running — restart the production cycle
+                player.AutoProductionProgress[recipeId] = 0;
+
+                // Execute production for 'batches' iterations
+                player.Money -= recipe.ProductionCost * batches;
 
                 // Move inputs
                 foreach (var input in recipe.Inputs)
                 {
-                    player.Inventory.RemoveQuantity(input.Key, input.Value);
+                    player.Inventory.RemoveQuantity(input.Key, input.Value * batches);
                 }
 
                 // Add outputs
@@ -623,12 +892,57 @@ namespace EconomicGame.Services
                 {
                     var marketItem = ExchangeItems.FirstOrDefault(i => i.Name == output.Key);
                     var price = marketItem?.CurrentPrice ?? 100m;
-                    int quantityWithEfficiency = (int)(output.Value * efficiencyMultiplier);
+                    int quantityWithEfficiency = (int)(output.Value * batches * efficiencyMultiplier);
                     player.Inventory.AddOrUpdateItem(output.Key, price, quantityWithEfficiency);
                 }
 
-                LogActivity($"[AUTO] {player.Name} произвёл {recipe.Name}");
+                LogActivity($"[AUTO] {player.Name} произвёл {recipe.Name} (x{batches})");
             }
+        }
+
+        public string UpgradeAutoProductionSpeed(Player player, Guid recipeId)
+        {
+            if (player == null) return "Игрок не найден!";
+
+            var recipe = ProductionRecipes.AllRecipes.FirstOrDefault(r => r.RecipeId == recipeId);
+            if (recipe == null) return "Рецепт не найден!";
+
+            if (player.AutoProductionLevels == null)
+            {
+                player.AutoProductionLevels = new Dictionary<Guid, int>();
+            }
+
+            int currentLevel = 1;
+            if (player.AutoProductionLevels.TryGetValue(recipeId, out int val))
+            {
+                currentLevel = val;
+            }
+
+            if (currentLevel >= 4)
+            {
+                return "Максимальный уровень автоматизации уже достигнут!";
+            }
+
+            int nextLevel = currentLevel + 1;
+            decimal cost = nextLevel switch
+            {
+                2 => 50000m,
+                3 => 200000m,
+                4 => 1000000m,
+                _ => 0m
+            };
+
+            if (player.Money < cost)
+            {
+                return $"Не хватает денег! Нужно {cost:C}, у тебя {player.Money:C}";
+            }
+
+            player.Money -= cost;
+            player.AutoProductionLevels[recipeId] = nextLevel;
+
+            LogActivity($"{player.Name} улучшил автоматизацию производства {recipe.Name} до уровня {nextLevel} за {cost:C}");
+            OnStateChanged?.Invoke();
+            return $"Успешно улучшено! Теперь уровень {nextLevel}.";
         }
 
         #endregion
@@ -757,18 +1071,28 @@ namespace EconomicGame.Services
             news.IsApplied = true;
         }
 
+        // Disaster catalogue: richer variety so the economy doesn't rely on Oil/Wheat shocks only.
+        private static readonly (string ItemName, double LossPercent, string DisasterName, string Template)[] DisasterPool =
+        {
+            ("Oil",          0.50, "Землетрясение",     "Мощное землетрясение разрушило нефтяные терминалы! 50% запасов {0} потеряно."),
+            ("Wheat",        0.70, "Наводнение",        "Сильное наводнение затопило зернохранилища! 70% запасов {0} уничтожено."),
+            ("Steel",        0.40, "Забастовка",        "Металлурги объявили общенациональную забастовку — 40% производства {0} остановлено."),
+            ("Copper",       0.45, "Обвал шахты",       "Обрушение в крупной шахте: 45% запасов {0} недоступны."),
+            ("Gold",         0.30, "Вооружённый налёт", "Налёт на хранилище: 30% запасов {0} пропало."),
+            ("SugarCane",    0.55, "Засуха",            "Сильная засуха выжгла плантации — 55% {0} потеряно."),
+            ("CoffeeBeans",  0.50, "Заморозки",         "Неожиданные заморозки уничтожили 50% урожая {0}."),
+        };
+
         private void GenerateDisaster()
         {
             // Small chance for a disaster (2% per tick)
             if (_random.NextDouble() >= 0.02) return;
 
-            bool isEarthquake = _random.NextDouble() > 0.5;
-            string itemName = isEarthquake ? "Oil" : "Wheat";
-            double lossPercent = isEarthquake ? 0.5 : 0.7;
-            string disasterName = isEarthquake ? "Землетрясение" : "Наводнение";
-            string description = isEarthquake 
-                ? "Мощное землетрясение разрушило нефтяные терминалы! 50% запасов нефти потеряно." 
-                : "Сильное наводнение затопило зернохранилища! 70% запасов зерна уничтожено.";
+            var disaster = DisasterPool[_random.Next(DisasterPool.Length)];
+            string itemName = disaster.ItemName;
+            double lossPercent = disaster.LossPercent;
+            string disasterName = disaster.DisasterName;
+            string description = string.Format(disaster.Template, itemName);
 
             // 1. Affect Market Stock
             var marketItem = _exchange.Items.FirstOrDefault(i => i.Name == itemName);
@@ -863,6 +1187,9 @@ namespace EconomicGame.Services
         {
             if (player == null) return "No player found!";
             
+            if (player.IsSabotaged)
+                return "Ваши операции заблокированы из-за саботажа! Дождитесь окончания действия эффекта.";
+            
             var totalCost = item.CurrentPrice * quantity;
 
             if (player.Money < totalCost)
@@ -872,8 +1199,9 @@ namespace EconomicGame.Services
                 return $"Not enough {item.Name} available! Only {item.AvailableQuantity} in stock.";
 
             // Phase 9: Logistics Constraints
-            if (player.Vehicle != null && quantity > player.Vehicle.CargoCapacity)
-                return $"Ваш транспорт ({player.Vehicle.Name}) может перевозить не более {player.Vehicle.CargoCapacity} ед. за раз. Совершите несколько поездок или смените транспорт.";
+            var totalFleetCapacity = player.Vehicles.Sum(v => v.CargoCapacity);
+            if (totalFleetCapacity > 0 && quantity > totalFleetCapacity)
+                return $"Ваш автопарк может перевозить не более {totalFleetCapacity} ед. за раз. Совершите несколько поездок или расширьте автопарк.";
 
             if (quantity > player.AvailableCargoSpace)
                 return $"Недостаточно места на складах! Свободно: {player.AvailableCargoSpace} ед.";
@@ -898,6 +1226,9 @@ namespace EconomicGame.Services
         public string SellItem(Player player, MarketItem item, int quantity)
         {
             if (player == null) return "No player found!";
+
+            if (player.IsSabotaged)
+                return "Ваши операции заблокированы из-за саботажа! Продажа невозможна.";
 
             var inventoryItem = player.Inventory.FirstOrDefault(i => i.ItemName == item.Name);
             if (inventoryItem == null)
@@ -935,6 +1266,9 @@ namespace EconomicGame.Services
         public string CreateListing(Player seller, string itemName, int quantity, decimal pricePerUnit, bool autoRepeat = false)
         {
             if (seller == null) return "Seller not found!";
+            
+            if (seller.IsSabotaged)
+                return "Контракты заблокированы из-за саботажа!";
             
             var inventoryItem = seller.Inventory.FirstOrDefault(i => i.ItemName == itemName);
             if (inventoryItem == null || inventoryItem.Quantity < quantity)
@@ -1054,14 +1388,15 @@ namespace EconomicGame.Services
 
         #region Interactive Events
 
-        private static readonly (string Title, string Description, List<EventChoice> Choices)[] EventTemplates = {
+        private static readonly (string Title, string Description, List<EventChoice> Choices, decimal MinMoney)[] EventTemplates = {
             (
                 "Storm Warning!",
                 "A major storm is approaching. It could damage stored goods.",
                 new List<EventChoice> {
                     new() { ChoiceId = 1, Text = "Buy insurance ($500)", Cost = 500, OutcomeDescription = "Your goods are protected.", MoneyChange = -500 },
                     new() { ChoiceId = 2, Text = "Risk it", Cost = 0, OutcomeDescription = "Let's hope for the best...", MoneyChange = 0 }
-                }
+                },
+                0
             ),
             (
                 "Investment Opportunity",
@@ -1069,7 +1404,8 @@ namespace EconomicGame.Services
                 new List<EventChoice> {
                     new() { ChoiceId = 1, Text = "Invest $1000", Cost = 1000, OutcomeDescription = "You take the gamble.", MoneyChange = -1000 },
                     new() { ChoiceId = 2, Text = "Pass", Cost = 0, OutcomeDescription = "You play it safe.", MoneyChange = 0 }
-                }
+                },
+                1000
             ),
             (
                 "Charity Request",
@@ -1077,7 +1413,8 @@ namespace EconomicGame.Services
                 new List<EventChoice> {
                     new() { ChoiceId = 1, Text = "Donate $200", Cost = 200, OutcomeDescription = "Your generosity is appreciated!", MoneyChange = -200, ReputationChange = 10 },
                     new() { ChoiceId = 2, Text = "Decline politely", Cost = 0, OutcomeDescription = "Maybe next time.", MoneyChange = 0, ReputationChange = -2 }
-                }
+                },
+                200
             ),
             (
                 "Lucky Find!",
@@ -1085,7 +1422,8 @@ namespace EconomicGame.Services
                 new List<EventChoice> {
                     new() { ChoiceId = 1, Text = "Keep it", Cost = 0, OutcomeDescription = "Finders keepers!", MoneyChange = 300, ReputationChange = -5 },
                     new() { ChoiceId = 2, Text = "Turn it in", Cost = 0, OutcomeDescription = "The owner is grateful.", MoneyChange = 50, ReputationChange = 5 }
-                }
+                },
+                0
             ),
             // Life-sim events
             (
@@ -1094,7 +1432,8 @@ namespace EconomicGame.Services
                 new List<EventChoice> {
                     new() { ChoiceId = 1, Text = "Пойти в больницу ($800)", Cost = 800, OutcomeDescription = "Врач выписал антибиотики. Через пару дней будешь как новенький!", MoneyChange = -800 },
                     new() { ChoiceId = 2, Text = "Перетерпеть", Cost = 0, OutcomeDescription = "Состояние ухудшилось... Пришлось ехать в скорую. Счёт вдвое больше.", MoneyChange = -1500 }
-                }
+                },
+                0
             ),
             (
                 "Встреча в баре",
@@ -1102,7 +1441,8 @@ namespace EconomicGame.Services
                 new List<EventChoice> {
                     new() { ChoiceId = 1, Text = "Купить! ($200)", Cost = 200, OutcomeDescription = "Сделка! 100 Wheat теперь твои.", MoneyChange = -200, ItemReward = "Wheat", ItemQuantity = 100 },
                     new() { ChoiceId = 2, Text = "Слишком хорошо, отказаться", Cost = 0, OutcomeDescription = "Осторожность не повредит. Он ушёл расстроенный.", MoneyChange = 0, ReputationChange = -1 }
-                }
+                },
+                200
             ),
             (
                 "День Рождения! 🎂",
@@ -1110,7 +1450,8 @@ namespace EconomicGame.Services
                 new List<EventChoice> {
                     new() { ChoiceId = 1, Text = "Устроить вечеринку ($150)", Cost = 150, OutcomeDescription = "Отличный вечер! Друзья скинулись на подарок.", MoneyChange = 100, ReputationChange = 5 },
                     new() { ChoiceId = 2, Text = "Посидеть скромно", Cost = 0, OutcomeDescription = "Тихо посидели с чаем. Подарили немного денег.", MoneyChange = 50, ReputationChange = 2 }
-                }
+                },
+                150
             ),
             (
                 "Подозрительный тип",
@@ -1118,7 +1459,8 @@ namespace EconomicGame.Services
                 new List<EventChoice> {
                     new() { ChoiceId = 1, Text = "Вложить $500", Cost = 500, OutcomeDescription = "Скорее всего это развод... но вдруг повезёт?", MoneyChange = -500 },
                     new() { ChoiceId = 2, Text = "Отказаться", Cost = 0, OutcomeDescription = "Здравый смысл победил. Он исчез в толпе.", MoneyChange = 0, ReputationChange = 1 }
-                }
+                },
+                500
             ),
             (
                 "Случайная работа",
@@ -1126,7 +1468,74 @@ namespace EconomicGame.Services
                 new List<EventChoice> {
                     new() { ChoiceId = 1, Text = "Поработать (4 часа)", Cost = 0, OutcomeDescription = "Заработал честные деньги и уважение.", MoneyChange = 300, ReputationChange = 3 },
                     new() { ChoiceId = 2, Text = "Отказаться", Cost = 0, OutcomeDescription = "Сегодня не твой день.", MoneyChange = 0 }
-                }
+                },
+                0
+            ),
+            // Premium Crisis Events
+            (
+                "event.robbery.title",
+                "event.robbery.desc",
+                new List<EventChoice> {
+                    new() { ChoiceId = 1, Text = "event.robbery.choice1", Cost = 15000, OutcomeDescription = "event.robbery.choice1.desc", MoneyChange = -15000 },
+                    new() { ChoiceId = 2, Text = "event.robbery.choice2", Cost = 0, OutcomeDescription = "event.robbery.choice2.desc", MoneyChange = -35000, ReputationChange = -15 }
+                },
+                15000
+            ),
+            (
+                "event.audit.title",
+                "event.audit.desc",
+                new List<EventChoice> {
+                    new() { ChoiceId = 1, Text = "event.audit.choice1", Cost = 25000, OutcomeDescription = "event.audit.choice1.desc", MoneyChange = -25000, ReputationChange = 5 },
+                    new() { ChoiceId = 2, Text = "event.audit.choice2", Cost = 0, OutcomeDescription = "event.audit.choice2.desc", MoneyChange = -50000, ReputationChange = -5 }
+                },
+                50000
+            ),
+            (
+                "event.fire.title",
+                "event.fire.desc",
+                new List<EventChoice> {
+                    new() { ChoiceId = 1, Text = "event.fire.choice1", Cost = 8000, OutcomeDescription = "event.fire.choice1.desc", MoneyChange = -8000, ReputationChange = 2 },
+                    new() { ChoiceId = 2, Text = "event.fire.choice2", Cost = 0, OutcomeDescription = "event.fire.choice2.desc", MoneyChange = -30000, ReputationChange = -5 }
+                },
+                15000
+            ),
+            (
+                "event.mafia.title",
+                "event.mafia.desc",
+                new List<EventChoice> {
+                    new() { ChoiceId = 1, Text = "event.mafia.choice1", Cost = 12000, OutcomeDescription = "event.mafia.choice1.desc", MoneyChange = -12000, ReputationChange = -8 },
+                    new() { ChoiceId = 2, Text = "event.mafia.choice2", Cost = 20000, OutcomeDescription = "event.mafia.choice2.desc", MoneyChange = -20000, ReputationChange = 15 },
+                    new() { ChoiceId = 3, Text = "event.mafia.choice3", Cost = 0, OutcomeDescription = "event.mafia.choice3.desc", MoneyChange = -40000, ReputationChange = -10 }
+                },
+                20000
+            ),
+            (
+                "event.flood.title",
+                "event.flood.desc",
+                new List<EventChoice> {
+                    new() { ChoiceId = 1, Text = "event.flood.choice1", Cost = 6000, OutcomeDescription = "event.flood.choice1.desc", MoneyChange = -6000, ReputationChange = 2 },
+                    new() { ChoiceId = 2, Text = "event.flood.choice2", Cost = 0, OutcomeDescription = "event.flood.choice2.desc", MoneyChange = -25000, ReputationChange = -8 }
+                },
+                15000
+            ),
+            (
+                "event.crisis.title",
+                "event.crisis.desc",
+                new List<EventChoice> {
+                    new() { ChoiceId = 1, Text = "event.crisis.choice1", Cost = 12000, OutcomeDescription = "event.crisis.choice1.desc", MoneyChange = -12000, ReputationChange = -3 },
+                    new() { ChoiceId = 2, Text = "event.crisis.choice2", Cost = 0, OutcomeDescription = "event.crisis.choice2.desc", MoneyChange = -30000, ReputationChange = -10 }
+                },
+                40000
+            ),
+            (
+                "event.cyber.title",
+                "event.cyber.desc",
+                new List<EventChoice> {
+                    new() { ChoiceId = 1, Text = "event.cyber.choice1", Cost = 15000, OutcomeDescription = "event.cyber.choice1.desc", MoneyChange = -15000, ReputationChange = -5 },
+                    new() { ChoiceId = 2, Text = "event.cyber.choice2", Cost = 20000, OutcomeDescription = "event.cyber.choice2.desc", MoneyChange = -20000, ReputationChange = 10 },
+                    new() { ChoiceId = 3, Text = "event.cyber.choice3", Cost = 0, OutcomeDescription = "event.cyber.choice3.desc", MoneyChange = -45000, ReputationChange = -15 }
+                },
+                30000
             )
         };
 
@@ -1142,7 +1551,11 @@ namespace EconomicGame.Services
             // Don't give too many pending events
             if (targetPlayer.PendingEvents.Count >= 3) return;
 
-            var template = EventTemplates[_random.Next(EventTemplates.Length)];
+            // SMART WEALTH FILTERING
+            var validTemplates = EventTemplates.Where(t => targetPlayer.Money >= t.MinMoney).ToList();
+            if (!validTemplates.Any()) return;
+
+            var template = validTemplates[_random.Next(validTemplates.Count)];
             
             var gameEvent = new GameEvent
             {
@@ -1155,7 +1568,9 @@ namespace EconomicGame.Services
                     Cost = c.Cost,
                     OutcomeDescription = c.OutcomeDescription,
                     MoneyChange = c.MoneyChange,
-                    ReputationChange = c.ReputationChange
+                    ReputationChange = c.ReputationChange,
+                    ItemReward = c.ItemReward,
+                    ItemQuantity = c.ItemQuantity
                 }).ToList(),
                 ExpiresAt = CurrentTime.AddMinutes(GameConstants.EventExpirationMinutes),
                 TargetPlayerId = targetPlayer.Id
@@ -1236,6 +1651,119 @@ namespace EconomicGame.Services
 
         #region Bar System
 
+        // --- Bar cash desk & betting limits (economy rebalance) ---
+        // The bar is a business with a finite cash desk, not an infinite money printer.
+        public decimal BarBankroll { get; set; } = GameConstants.BarBankrollInitial;
+
+        /// <summary>
+        /// Set by PokerService while a hand is being played.
+        /// Saving is blocked mid-hand (design decision: no save-scumming at the poker table).
+        /// </summary>
+        public bool PokerHandInProgress { get; set; }
+
+        /// <summary>
+        /// The bar keeps business hours (18:00–02:00): no all-day gambling marathons.
+        /// </summary>
+        public bool IsBarOpen =>
+            CurrentTime.Hour >= GameConstants.BarOpenHour || CurrentTime.Hour < GameConstants.BarCloseHour;
+
+        public string BarClosedMessage =>
+            $"🔒 Бар закрыт! Работает с {GameConstants.BarOpenHour}:00 до 0{GameConstants.BarCloseHour}:00. Сейчас {CurrentTime:HH:mm} — займись делом, торговец!";
+
+        /// <summary>
+        /// Dynamic max bet: capped both by the absolute table limit and by 10% of the player's net worth.
+        /// </summary>
+        public decimal GetMaxBet(Player player)
+        {
+            if (player == null) return GameConstants.GamblingMinBet;
+            var wealthCap = Math.Floor(player.NetWorth * GameConstants.MaxBetShareOfNetWorth);
+            var cap = Math.Min(GameConstants.GamblingMaxBet, wealthCap);
+            return Math.Max(GameConstants.GamblingMinBet, cap);
+        }
+
+        private void SyncBarDay(Player player)
+        {
+            if (player.BarWinningsDate != CurrentTime.Date)
+            {
+                player.BarWinningsDate = CurrentTime.Date;
+                player.BarWinningsToday = 0m;
+            }
+        }
+
+        public decimal GetRemainingDailyWinCap(Player player)
+        {
+            SyncBarDay(player);
+            return Math.Max(0m, GameConstants.BarDailyWinCap - player.BarWinningsToday);
+        }
+
+        /// <summary>
+        /// Central bet validation for ALL bar games (engine-side and UI-side).
+        /// Returns null when the bet is fine, otherwise a user-facing message.
+        /// </summary>
+        public string? ValidateBet(Player player, decimal bet)
+        {
+            if (player == null) return "Игрок не найден!";
+            if (!IsBarOpen) return BarClosedMessage;
+            if (bet < GameConstants.GamblingMinBet)
+                return $"Минимальная ставка: {GameConstants.GamblingMinBet:C}";
+
+            var maxBet = GetMaxBet(player);
+            if (bet > maxBet)
+                return $"Максимальная ставка для тебя сейчас: {maxBet:C} (не больше 10% от капитала и лимита стола)";
+
+            if (player.Money < bet)
+                return $"Не хватает денег! У тебя {player.Money:C}";
+
+            if (BarBankroll <= 0m)
+                return "Касса бара пуста — сегодня выплат больше не будет. Приходи завтра! 🍺";
+
+            if (GetRemainingDailyWinCap(player) <= 0m)
+                return "Бармен разводит руками: «На сегодня хватит, чемпион. Приходи завтра».";
+
+            return null;
+        }
+
+        /// <summary>
+        /// Settles a gambling result through the bar's cash desk.
+        /// net &gt; 0 — player's net win (clamped by the bankroll and the daily win cap);
+        /// net &lt; 0 — player's loss (feeds the bankroll back).
+        /// Returns the actually paid/charged amount and an optional note when a win was clamped.
+        /// </summary>
+        public (decimal actualNet, string? note) SettleGambling(Player player, decimal net)
+        {
+            if (player == null) return (0m, null);
+            SyncBarDay(player);
+
+            if (net <= 0m)
+            {
+                player.Money += net;          // net is negative — player pays
+                BarBankroll -= net;           // ...and the bar's cash desk grows
+                player.BarWinningsToday += net; // losses free up daily win headroom
+                return (net, null);
+            }
+
+            var payable = Math.Min(net, Math.Min(GetRemainingDailyWinCap(player), BarBankroll));
+            player.Money += payable;
+            BarBankroll -= payable;
+            player.BarWinningsToday += payable;
+
+            string? note = payable < net
+                ? $"Бар смог выплатить только {payable:C} из {net:C} — касса пуста!"
+                : null;
+            return (payable, note);
+        }
+
+        /// <summary>
+        /// Daily refill of the bar's cash desk (called on the night rollover).
+        /// </summary>
+        private void RefillBarBankroll()
+        {
+            if (BarBankroll < GameConstants.BarBankrollInitial)
+            {
+                BarBankroll = Math.Min(GameConstants.BarBankrollInitial, BarBankroll + GameConstants.BarBankrollDailyRefill);
+            }
+        }
+
         private static readonly string[] BarRumors = {
             "Слышал, что {0} скоро подорожает...",
             "Говорят, скоро будет дефицит {0}!",
@@ -1244,6 +1772,8 @@ namespace EconomicGame.Services
             "Инсайдеры сливают {0} — готовься!"
         };
 
+        // NOTE: Order of this array MUST match the BarEncounterType enum order.
+        // UI overrides the service-side string with a localized version based on the enum value.
         private static readonly string[] BarEncounters = {
             "Подсел какой-то мужик, предлагает выпить вместе.",
             "Бармен рассказывает истории о рынке.",
@@ -1275,6 +1805,7 @@ namespace EconomicGame.Services
         public (string result, string? rumorItem) OrderDrink(Player player, string drinkType)
         {
             if (player == null) return ("Игрок не найден!", null);
+            if (!IsBarOpen) return (BarClosedMessage, null);
 
             var price = drinkType switch
             {
@@ -1320,16 +1851,8 @@ namespace EconomicGame.Services
 
         public string PlayGambling(Player player, decimal bet)
         {
-            if (player == null) return "Игрок не найден!";
-
-            if (bet < GameConstants.GamblingMinBet)
-                return $"Минимальная ставка: {GameConstants.GamblingMinBet:C}";
-
-            if (bet > GameConstants.GamblingMaxBet)
-                return $"Максимальная ставка: {GameConstants.GamblingMaxBet:C}";
-
-            if (player.Money < bet)
-                return $"Не хватает денег! У тебя {player.Money:C}";
+            var betError = ValidateBet(player, bet);
+            if (betError != null) return betError;
 
             // Drunk players make worse decisions
             var winChance = 0.45; // Base 45% chance
@@ -1345,15 +1868,15 @@ namespace EconomicGame.Services
             if (_random.NextDouble() < winChance)
             {
                 // Win! Double the bet
-                player.Money += bet;
-                LogActivity($"{player.Name} выиграл {bet:C} в баре!");
+                var (paid, note) = SettleGambling(player, bet);
+                LogActivity($"{player.Name} выиграл {paid:C} в баре!");
                 OnStateChanged?.Invoke();
-                return $"🎉 Победа! Ты выиграл {bet:C}! Теперь у тебя {player.Money:C}";
+                return $"🎉 Победа! Ты выиграл {paid:C}! Теперь у тебя {player.Money:C}" + (note != null ? $" ({note})" : "");
             }
             else
             {
                 // Lose
-                player.Money -= bet;
+                SettleGambling(player, -bet);
                 LogActivity($"{player.Name} проиграл {bet:C} в баре");
                 OnStateChanged?.Invoke();
                 return $"😢 Проигрыш! Ты потерял {bet:C}. Осталось {player.Money:C}";
@@ -1365,16 +1888,8 @@ namespace EconomicGame.Services
         /// </summary>
         public string PlayDice(Player player, decimal bet, string betType)
         {
-            if (player == null) return "Игрок не найден!";
-
-            if (bet < GameConstants.GamblingMinBet)
-                return $"Минимальная ставка: {GameConstants.GamblingMinBet:C}";
-
-            if (bet > GameConstants.GamblingMaxBet)
-                return $"Максимальная ставка: {GameConstants.GamblingMaxBet:C}";
-
-            if (player.Money < bet)
-                return $"Не хватает денег! У тебя {player.Money:C}";
+            var betError = ValidateBet(player, bet);
+            if (betError != null) return betError;
 
             // Roll two dice
             var die1 = _random.Next(1, 7);
@@ -1415,14 +1930,14 @@ namespace EconomicGame.Services
             if (won)
             {
                 var winnings = bet * (multiplier - 1);
-                player.Money += winnings;
-                LogActivity($"{player.Name} выиграл {winnings:C} в кости (выпало {total})!");
+                var (paid, note) = SettleGambling(player, winnings);
+                LogActivity($"{player.Name} выиграл {paid:C} в кости (выпало {total})!");
                 OnStateChanged?.Invoke();
-                return $"🎲🎲 Выпало {die1} + {die2} = {total}! Ты поставил на {betDescription} и выиграл {winnings:C}! 🎉";
+                return $"🎲🎲 Выпало {die1} + {die2} = {total}! Ты поставил на {betDescription} и выиграл {paid:C}! 🎉" + (note != null ? $" ({note})" : "");
             }
             else
             {
-                player.Money -= bet;
+                SettleGambling(player, -bet);
                 LogActivity($"{player.Name} проиграл {bet:C} в кости (выпало {total})");
                 OnStateChanged?.Invoke();
                 return $"🎲🎲 Выпало {die1} + {die2} = {total}. Ты поставил на {betDescription}... Проигрыш {bet:C} 😢";
@@ -1434,16 +1949,8 @@ namespace EconomicGame.Services
         /// </summary>
         public string PlayBlackjack(Player player, decimal bet)
         {
-            if (player == null) return "Игрок не найден!";
-
-            if (bet < GameConstants.GamblingMinBet)
-                return $"Минимальная ставка: {GameConstants.GamblingMinBet:C}";
-
-            if (bet > GameConstants.GamblingMaxBet)
-                return $"Максимальная ставка: {GameConstants.GamblingMaxBet:C}";
-
-            if (player.Money < bet)
-                return $"Не хватает денег! У тебя {player.Money:C}";
+            var betError = ValidateBet(player, bet);
+            if (betError != null) return betError;
 
             // Simplified blackjack - draw cards for player and dealer
             int DrawCard() => Math.Min(_random.Next(1, 14), 10); // 1-10, face cards = 10
@@ -1480,7 +1987,7 @@ namespace EconomicGame.Services
             if (playerTotal > 21)
             {
                 // Player busts
-                player.Money -= bet;
+                SettleGambling(player, -bet);
                 resultEmoji = "💥";
                 resultText = $"Перебор! У тебя {playerTotal}. Проигрыш {bet:C}";
                 LogActivity($"{player.Name} проиграл {bet:C} в блэкджек (перебор)");
@@ -1488,23 +1995,23 @@ namespace EconomicGame.Services
             else if (dealerTotal > 21)
             {
                 // Dealer busts
-                player.Money += bet;
+                var (paidDealerBust, noteDealerBust) = SettleGambling(player, bet);
                 resultEmoji = "🎉";
-                resultText = $"Дилер перебрал ({dealerTotal})! Ты выиграл {bet:C}!";
-                LogActivity($"{player.Name} выиграл {bet:C} в блэкджек!");
+                resultText = $"Дилер перебрал ({dealerTotal})! Ты выиграл {paidDealerBust:C}!" + (noteDealerBust != null ? $" ({noteDealerBust})" : "");
+                LogActivity($"{player.Name} выиграл {paidDealerBust:C} в блэкджек!");
             }
             else if (playerTotal > dealerTotal)
             {
                 // Player wins
-                player.Money += bet;
+                var (paidWin, noteWin) = SettleGambling(player, bet);
                 resultEmoji = "🃏";
-                resultText = $"Ты: {playerTotal}, Дилер: {dealerTotal}. Победа! +{bet:C}";
-                LogActivity($"{player.Name} выиграл {bet:C} в блэкджек!");
+                resultText = $"Ты: {playerTotal}, Дилер: {dealerTotal}. Победа! +{paidWin:C}" + (noteWin != null ? $" ({noteWin})" : "");
+                LogActivity($"{player.Name} выиграл {paidWin:C} в блэкджек!");
             }
             else if (playerTotal < dealerTotal)
             {
                 // Dealer wins
-                player.Money -= bet;
+                SettleGambling(player, -bet);
                 resultEmoji = "😢";
                 resultText = $"Ты: {playerTotal}, Дилер: {dealerTotal}. Проигрыш {bet:C}";
                 LogActivity($"{player.Name} проиграл {bet:C} в блэкджек");
@@ -1525,16 +2032,8 @@ namespace EconomicGame.Services
         /// </summary>
         public string PlayRoulette(Player player, decimal bet, string betType, int? number = null)
         {
-            if (player == null) return "Игрок не найден!";
-
-            if (bet < GameConstants.GamblingMinBet)
-                return $"Минимальная ставка: {GameConstants.GamblingMinBet:C}";
-
-            if (bet > GameConstants.GamblingMaxBet)
-                return $"Максимальная ставка: {GameConstants.GamblingMaxBet:C}";
-
-            if (player.Money < bet)
-                return $"Не хватает денег! У тебя {player.Money:C}";
+            var betError = ValidateBet(player, bet);
+            if (betError != null) return betError;
 
             // Spin the wheel (0-36)
             var result = _random.Next(0, 37);
@@ -1581,42 +2080,45 @@ namespace EconomicGame.Services
             if (won)
             {
                 var winnings = bet * (multiplier - 1);
-                player.Money += winnings;
-                LogActivity($"{player.Name} выиграл {winnings:C} в рулетку (выпало {result})!");
+                var (paid, note) = SettleGambling(player, winnings);
+                LogActivity($"{player.Name} выиграл {paid:C} в рулетку (выпало {result})!");
                 OnStateChanged?.Invoke();
-                return $"🎰 Выпало {colorEmoji} {result}! Ты поставил на {betDescription} и выиграл {winnings:C}! 🎉";
+                return $"🎰 Выпало {colorEmoji} {result}! Ты поставил на {betDescription} и выиграл {paid:C}! 🎉" + (note != null ? $" ({note})" : "");
             }
             else
             {
-                player.Money -= bet;
+                SettleGambling(player, -bet);
                 LogActivity($"{player.Name} проиграл {bet:C} в рулетку (выпало {result})");
                 OnStateChanged?.Invoke();
                 return $"🎰 Выпало {colorEmoji} {result}. Ты поставил на {betDescription}... Проигрыш {bet:C} 😢";
             }
         }
 
-        public (string encounter, bool hasSpecialDeal, string? dealItem, decimal? dealPrice, int? dealQuantity) TryMeetSomeone(Player player)
+        public (string encounter, bool hasSpecialDeal, string? dealItem, decimal? dealPrice, int? dealQuantity, BarEncounterType? encounterType) TryMeetSomeone(Player player)
         {
-            if (player == null) return ("Игрок не найден!", false, null, null, null);
+            if (player == null) return ("Игрок не найден!", false, null, null, null, null);
+            if (!IsBarOpen) return (BarClosedMessage, false, null, null, null, null);
 
             if (player.IntoxicationLevel == 0)
-                return ("Ты трезвый. Закажи что-нибудь, чтобы завести разговор!", false, null, null, null);
+                return ("Ты трезвый. Закажи что-нибудь, чтобы завести разговор!", false, null, null, null, null);
 
-            var encounter = BarEncounters[_random.Next(BarEncounters.Length)];
+            var idx = _random.Next(BarEncounters.Length);
+            var encounter = BarEncounters[idx];
+            var encType = (BarEncounterType)idx;
 
             // More drunk = more likely to get a deal (but maybe worse)
             var dealChance = 0.2 + (player.IntoxicationLevel * 0.1); // 30-50%+
-            
+
             if (_random.NextDouble() < dealChance)
             {
                 var item = _exchange.Items[_random.Next(_exchange.Items.Count)];
                 var quantity = _random.Next(20, 100);
-                
+
                 // Discount based on intoxication (but drunk = riskier deals)
-                var discountFactor = player.IntoxicationLevel >= 3 
+                var discountFactor = player.IntoxicationLevel >= 3
                     ? _random.NextDouble() * 0.5 + 0.3  // 30-80% = could be bad or good
                     : 0.5 + _random.NextDouble() * 0.3; // 50-80% = usually good
-                
+
                 var dealPrice = item.CurrentPrice * (decimal)discountFactor;
 
                 return (
@@ -1624,27 +2126,152 @@ namespace EconomicGame.Services
                     true,
                     item.Name,
                     dealPrice,
-                    quantity
+                    quantity,
+                    encType
                 );
             }
 
-            return (encounter, false, null, null, null);
+            return (encounter, false, null, null, null, encType);
         }
 
-        public string AcceptBarDeal(Player player, string itemName, decimal pricePerUnit, int quantity)
+        /// <summary>
+        /// Scam flavor texts used when the stranger stiffs the player after being bought a drink.
+        /// Returned as a <see cref="BarScamType"/> so the UI can localize without touching the service.
+        /// </summary>
+        private static readonly BarScamType[] ScamOutcomes = {
+            BarScamType.DrinkAndLeave,
+            BarScamType.BoringStory,
+            BarScamType.BathroomExit,
+        };
+
+        /// <summary>
+        /// Buy a drink for the stranger who just sat down at your table.
+        /// Costs StrangerDrinkPrice and bumps your own intoxication.
+        /// 50/50 coin flip: half the time it pays off (deal or rumor),
+        /// half the time the stranger just takes the drink and leaves (no reward).
+        /// </summary>
+        public (string result, string? rumorItem, bool hasSpecialDeal, string? dealItem, decimal? dealPrice, int? dealQuantity, BarScamType? scamType, bool isStolen) BuyDrinkForStranger(Player player)
         {
-            if (player == null) return "Игрок не найден!";
+            if (player == null) return ("Игрок не найден!", null, false, null, null, null, null, false);
+            if (!IsBarOpen) return (BarClosedMessage, null, false, null, null, null, null, false);
+
+            var price = GameConstants.StrangerDrinkPrice;
+            if (player.Money < price)
+                return ($"Не хватает денег! Нужно {price:C}", null, false, null, null, null, null, false);
+
+            player.Money -= price;
+            // Drinking together bumps your own intoxication a level
+            player.IntoxicationLevel++;
+            player.LastBarVisit = CurrentTime;
+            player.SoberUpTime = CurrentTime.AddMinutes(GameConstants.SoberUpMinutes * player.IntoxicationLevel);
+
+            // 50/50 — half the time he's legit, half the time he's a conman who just takes the drink.
+            if (_random.NextDouble() < 0.5)
+            {
+                // LEGIT: within the reward branch, split between deal and rumor.
+                // Bias toward deal as intoxication rises (he opens up).
+                var dealChance = 0.4 + (player.IntoxicationLevel * 0.1); // 50-70%
+                if (_random.NextDouble() < dealChance)
+                {
+                    bool isStolen = _random.NextDouble() < 0.3;
+                    var item = _exchange.Items[_random.Next(_exchange.Items.Count)];
+                    var quantity = _random.Next(20, 100);
+                    double discountFactor;
+                    if (isStolen)
+                    {
+                        discountFactor = 0.3 + _random.NextDouble() * 0.1; // 30-40% of market price (60-70% discount)
+                    }
+                    else
+                    {
+                        discountFactor = 0.5 + _random.NextDouble() * 0.3; // 50-80% of market price (20-50% discount)
+                    }
+                    var dealPrice = item.CurrentPrice * (decimal)discountFactor;
+
+                    LogActivity($"{player.Name} угостил незнакомца выпивкой и получил предложение на {(isStolen ? "ворованный " : "")}{item.Name}");
+                    OnStateChanged?.Invoke();
+                    return (
+                        isStolen 
+                            ? $"Ты угостил его выпивкой. Он воровато огляделся и прошептал: «Слушай, есть горячие краденые {item.Name}! Отдам {quantity} шт. с огромной скидкой — всего по {dealPrice:C} за штуку!»"
+                            : $"Ты угостил его выпивкой. Он расслабился и предлагает {quantity} {item.Name} по {dealPrice:C} за штуку!",
+                        null,
+                        true,
+                        item.Name,
+                        dealPrice,
+                        quantity,
+                        null,
+                        isStolen
+                    );
+                }
+                else
+                {
+                    var item = _exchange.Items[_random.Next(_exchange.Items.Count)];
+                    var rumor = BarRumors[_random.Next(BarRumors.Length)];
+                    LogActivity($"{player.Name} угостил незнакомца выпивкой и услышал слух о {item.Name}");
+                    OnStateChanged?.Invoke();
+                    return (
+                        $"Ты угостил его выпивкой. Он наклонился ближе и прошептал: «{string.Format(rumor, item.Name)}»",
+                        item.Name,
+                        false,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false
+                    );
+                }
+            }
+            else
+            {
+                // SCAM: the stranger just pockets the drink. Player ate the StrangerDrinkPrice.
+                var scam = ScamOutcomes[_random.Next(ScamOutcomes.Length)];
+                LogActivity($"{player.Name} угостил незнакомца выпивкой, но остался ни с чем ({scam})");
+                OnStateChanged?.Invoke();
+                return ("", null, false, null, null, null, scam, false);
+            }
+        }
+
+        public (string result, bool success, bool isPoliceRaid, bool bountyGiven, decimal bountyAmount) AcceptBarDeal(
+            Player player, string itemName, decimal pricePerUnit, int quantity, bool isStolen = false)
+        {
+            if (player == null) return ("Игрок не найден!", false, false, false, 0);
 
             var totalCost = pricePerUnit * quantity;
             if (player.Money < totalCost)
-                return $"Не хватает денег! Нужно {totalCost:C}";
+                return ($"Не хватает денег! Нужно {totalCost:C}", false, false, false, 0);
 
             player.Money -= totalCost;
-            player.Inventory.AddOrUpdateItem(itemName, pricePerUnit, quantity);
 
-            LogActivity($"{player.Name} купил {quantity} {itemName} по сделке в баре за {totalCost:C}");
-            OnStateChanged?.Invoke();
-            return $"Сделка! Купил {quantity} {itemName} за {totalCost:C}";
+            if (isStolen)
+            {
+                // POLICE RAID! Confiscation occurs.
+                // Find market value of the goods (current standard price * quantity)
+                var exchangeItem = _exchange.Items.FirstOrDefault(i => i.Name == itemName);
+                var currentPrice = exchangeItem?.CurrentPrice ?? pricePerUnit;
+                var marketValue = currentPrice * quantity;
+                var bounty = Math.Round(marketValue * 0.1m, 2);
+
+                bool bountyGiven = _random.NextDouble() < 0.5;
+                if (bountyGiven)
+                {
+                    player.Money += bounty;
+                    LogActivity($"{player.Name} попал под облаву полиции! Конфискован ворованный товар {itemName} в количестве {quantity} шт., но выплачена награда {bounty:C}");
+                    OnStateChanged?.Invoke();
+                    return ($"Облава полиции! Товар конфискован, получена награда {bounty:C}", true, true, true, bounty);
+                }
+                else
+                {
+                    LogActivity($"{player.Name} попал под облаву полиции! Конфискован ворованный товар {itemName} в количестве {quantity} шт. Награда не выплачена.");
+                    OnStateChanged?.Invoke();
+                    return ("Облава полиции! Товар конфискован без какой-либо награды.", true, true, false, 0);
+                }
+            }
+            else
+            {
+                player.Inventory.AddOrUpdateItem(itemName, pricePerUnit, quantity);
+                LogActivity($"{player.Name} купил {quantity} {itemName} по сделке в баре за {totalCost:C}");
+                OnStateChanged?.Invoke();
+                return ($"Сделка! Купил {quantity} {itemName} за {totalCost:C}", true, false, false, 0);
+            }
         }
 
         #endregion
@@ -1663,9 +2290,6 @@ namespace EconomicGame.Services
         {
             if (player == null) return "Игрок не найден!";
 
-            if (player.Property != null)
-                return $"У тебя уже есть жильё: {player.Property.Name}. Сначала продай его!";
-
             var propertyInfo = AvailableProperties.FirstOrDefault(p => p.Type == propertyType);
             if (propertyInfo == default)
                 return "Такой недвижимости не существует!";
@@ -1674,7 +2298,7 @@ namespace EconomicGame.Services
                 return $"Не хватает денег! Нужно {propertyInfo.Price:C}, у тебя {player.Money:C}";
 
             player.Money -= propertyInfo.Price;
-            player.Property = new Property
+            var newProperty = new Property
             {
                 Type = propertyType,
                 Name = propertyInfo.Name,
@@ -1685,74 +2309,128 @@ namespace EconomicGame.Services
                 GuestCapacity = propertyInfo.Capacity,
                 BirthdayGiftBonus = propertyInfo.BirthdayBonus
             };
+            player.Properties.Add(newProperty);
 
             LogActivity($"{player.Name} купил {propertyInfo.Emoji} {propertyInfo.Name} за {propertyInfo.Price:C}");
             OnStateChanged?.Invoke();
             return $"Поздравляем! Ты купил {propertyInfo.Emoji} {propertyInfo.Name}!";
         }
 
-        public string SellProperty(Player player)
+        public string SellProperty(Player player, Property property)
         {
             if (player == null) return "Игрок не найден!";
-
-            if (player.Property == null)
-                return "У тебя нет недвижимости для продажи!";
+            if (property == null) return "Недвижимость не найдена!";
+            if (!player.Properties.Contains(property)) return "У тебя нет этой недвижимости!";
 
             // Sell for 70% of original price
-            var sellPrice = player.Property.PurchasePrice * 0.7m;
-            var propertyName = player.Property.Name;
+            var sellPrice = property.PurchasePrice * 0.7m;
+            var propertyName = property.Name;
 
             player.Money += sellPrice;
-            player.Property = null;
+            player.Properties.Remove(property);
 
             LogActivity($"{player.Name} продал {propertyName} за {sellPrice:C}");
             OnStateChanged?.Invoke();
             return $"Продал {propertyName} за {sellPrice:C} (70% от цены покупки)";
         }
 
+        public string SellProperty(Player player)
+        {
+            if (player == null) return "Игрок не найден!";
+            var property = player.Properties.FirstOrDefault();
+            if (property == null) return "У тебя нет недвижимости для продажи!";
+            return SellProperty(player, property);
+        }
+
+        /// <summary>
+        /// Homeless penalty: a player (or bot) without any housing sleeps in the car.
+        /// Reputation drips away nightly, and there's a chance thieves hit the car —
+        /// they take a cut of the cash in the glovebox. Applies equally to humans and AI.
+        /// </summary>
+        private void ProcessHomelessNight(Player player)
+        {
+            if (player.Properties.Any()) return;
+            if (player.IsBankrupt) return;
+
+            // Reputation slowly erodes — nobody respects a trader who sleeps in a parking lot
+            if (player.Reputation > GameConstants.HomelessReputationFloor)
+            {
+                player.Reputation = Math.Max(GameConstants.HomelessReputationFloor,
+                    player.Reputation - GameConstants.HomelessReputationLossPerDay);
+                if (!player.IsAI)
+                {
+                    LogActivity($"🚗 {player.Name} провёл ночь в машине. Репутация страдает (−{GameConstants.HomelessReputationLossPerDay}). Может, пора снять хотя бы комнату?");
+                }
+            }
+
+            // Thieves prowl parking lots at night
+            if (player.Money > 0 && _random.NextDouble() < GameConstants.HomelessTheftChancePerNight)
+            {
+                var stolen = Math.Min(Math.Round(player.Money * GameConstants.HomelessTheftCashPercent, 2),
+                    GameConstants.HomelessTheftCashCap);
+                if (stolen > 0)
+                {
+                    player.Money -= stolen;
+                    if (!player.IsAI)
+                    {
+                        LogActivity($"🥷 Ночью машину {player.Name} вскрыли! Из бардачка пропало {stolen:C}. Дом с дверью и замком решил бы проблему...");
+                    }
+                }
+            }
+        }
+
         public void ProcessRent(Player player)
         {
-            if (player.Property == null) return;
-
-            var daysSinceLastRent = (CurrentTime - player.Property.LastRentPaid).Days;
-            if (daysSinceLastRent >= GameConstants.RentDueGameDays)
+            foreach (var property in player.Properties.ToList())
             {
-                // Rent is due!
-                if (player.Money >= player.Property.MonthlyRent)
+                var daysSinceLastRent = (CurrentTime - property.LastRentPaid).Days;
+                if (daysSinceLastRent >= GameConstants.RentDueGameDays)
                 {
-                    player.Money -= player.Property.MonthlyRent;
-                    player.Property.LastRentPaid = CurrentTime;
-                    LogActivity($"{player.Name} заплатил аренду {player.Property.MonthlyRent:C} за {player.Property.Name}");
-                }
-                else
-                {
-                    // Can't pay rent - lose property!
-                    LogActivity($"{player.Name} не смог заплатить аренду и потерял {player.Property.Name}!");
-                    player.Property = null;
+                    // Rent is due!
+                    if (player.Money >= property.MonthlyRent)
+                    {
+                        player.Money -= property.MonthlyRent;
+                        property.LastRentPaid = CurrentTime;
+                        LogActivity($"{player.Name} заплатил аренду {property.MonthlyRent:C} за {property.Name}");
+                    }
+                    else
+                    {
+                        // Can't pay rent - lose property!
+                        LogActivity($"{player.Name} не смог заплатить аренду и потерял {property.Name}!");
+                        player.Properties.Remove(property);
+                    }
                 }
             }
         }
 
         public string GetPropertyStatus(Player player)
         {
-            if (player?.Property == null)
+            if (player == null || !player.Properties.Any())
                 return "Бездомный 🚗 (спишь в машине)";
 
-            var propertyInfo = AvailableProperties.FirstOrDefault(p => p.Type == player.Property.Type);
-            return $"{propertyInfo.Emoji} {player.Property.Name}";
+            if (player.Properties.Count == 1)
+            {
+                var p = player.Properties[0];
+                var info = AvailableProperties.FirstOrDefault(x => x.Type == p.Type);
+                var emoji = info != default ? info.Emoji : "🏡";
+                return $"{emoji} {p.Name}";
+            }
+
+            return $"🏡 Недвижимость ({player.Properties.Count} шт.)";
         }
 
         public (int guestCount, decimal giftAmount) CalculateBirthdayGifts(Player player)
         {
-            if (player?.Property == null)
+            if (player == null || !player.Properties.Any())
             {
                 // Homeless - minimal gifts
                 return (1, 20m);
             }
 
-            var guestCount = _random.Next(1, player.Property.GuestCapacity + 1);
-            var baseGift = player.Property.BirthdayGiftBonus;
-            var totalGifts = baseGift + (guestCount * 10m); // Extra per guest
+            int maxGuests = player.Properties.Sum(p => p.GuestCapacity);
+            var guestCount = _random.Next(1, maxGuests + 1);
+            var totalBonus = player.Properties.Sum(p => p.BirthdayGiftBonus);
+            var totalGifts = totalBonus + (guestCount * 10m); // Extra per guest
 
             return (guestCount, totalGifts);
         }

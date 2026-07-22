@@ -18,10 +18,17 @@ builder.Services.AddSingleton<SyncEngine>();
 builder.Services.AddSingleton<CorporateRivalryService>();
 builder.Services.AddSingleton<CorporateActionService>();
 builder.Services.AddSingleton<InsuranceService>();
+builder.Services.AddSingleton<ScenarioService>();
 builder.Services.AddSingleton<GameEngine>();
 builder.Services.AddSingleton<AIService>();
+builder.Services.AddSingleton<PokerService>();
 builder.Services.AddSingleton<SaveGameService>();
 builder.Services.AddHostedService<GameTickService>();
+
+// Localization is Scoped — one instance per Blazor circuit so each
+// connected user keeps their own language preference.
+builder.Services.AddScoped<LocalizationService>();
+builder.Services.AddScoped<NavigationStateService>();
 
 var app = builder.Build();
 

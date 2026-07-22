@@ -1,56 +1,122 @@
+@inject EconomicGame.Services.NavigationStateService NavState
+@inject LocalizationService Loc
+@implements IDisposable
+
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">Trader</a>
+        <a class="navbar-brand" href="">@Loc["app.title"]</a>
     </div>
 </div>
 
 <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-<div class="nav flex-column">
-    <a class="nav-link" href="#" @onclick='() => SetView("Market")'>Рынок</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("StockExchange")'>Биржа</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("StockMarket")'>📊 Фонд. рынок</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("TradeListings")'>Trade Listings</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("Bank")'>Банк</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("Housing")'>🏠 Жильё</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("Logistics")'>🚛 Логистика</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("Production")'>🏭 Производство</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("Inventory")'>📦 Инвентарь</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("Bar")'>🍺 Бар</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("Events")'>🎲 События</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("Save")'>💾 Сохранение</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("AIPlayers")'>AI Traders</a>
-    <a class="nav-link" href="#" @onclick='() => SetView("Profile")'>Профиль</a>
-</div>
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-
     <nav class="nav flex-column">
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
+            <a class="nav-link @(NavState.CurrentView == "Market" ? "active" : "")" href="#" @onclick='() => SetView("Market")'>
+                @Loc["nav.market"]
+            </a>
         </div>
-
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
+            <a class="nav-link @(NavState.CurrentView == "StockExchange" ? "active" : "")" href="#" @onclick='() => SetView("StockExchange")'>
+                @Loc["nav.stock_exchange"]
+            </a>
         </div>
-
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
+            <a class="nav-link @(NavState.CurrentView == "StockMarket" ? "active" : "")" href="#" @onclick='() => SetView("StockMarket")'>
+                @Loc["nav.stock_market"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "TradeListings" ? "active" : "")" href="#" @onclick='() => SetView("TradeListings")'>
+                @Loc["nav.trade_listings"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "Bank" ? "active" : "")" href="#" @onclick='() => SetView("Bank")'>
+                @Loc["nav.bank"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "Housing" ? "active" : "")" href="#" @onclick='() => SetView("Housing")'>
+                @Loc["nav.housing"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "Logistics" ? "active" : "")" href="#" @onclick='() => SetView("Logistics")'>
+                @Loc["nav.logistics"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "Production" ? "active" : "")" href="#" @onclick='() => SetView("Production")'>
+                @Loc["nav.production"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "Inventory" ? "active" : "")" href="#" @onclick='() => SetView("Inventory")'>
+                @Loc["nav.inventory"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "Bar" ? "active" : "")" href="#" @onclick='() => SetView("Bar")'>
+                @Loc["nav.bar"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "Poker" ? "active" : "")" href="#" @onclick='() => SetView("Poker")'>
+                @Loc["nav.poker"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "Events" ? "active" : "")" href="#" @onclick='() => SetView("Events")'>
+                @Loc["nav.events"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "Scenarios" ? "active" : "")" href="#" @onclick='() => SetView("Scenarios")'>
+                @Loc["nav.scenarios"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "Save" ? "active" : "")" href="#" @onclick='() => SetView("Save")'>
+                @Loc["nav.save"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "AIPlayers" ? "active" : "")" href="#" @onclick='() => SetView("AIPlayers")'>
+                @Loc["nav.ai_traders"]
+            </a>
+        </div>
+        <div class="nav-item px-3">
+            <a class="nav-link @(NavState.CurrentView == "Profile" ? "active" : "")" href="#" @onclick='() => SetView("Profile")'>
+                @Loc["nav.profile"]
+            </a>
         </div>
     </nav>
 </div>
 
 @code {
-    [Parameter]
-    public EventCallback<string> OnViewChange { get; set; }
-
-    private async Task SetView(string view)
+    protected override void OnInitialized()
     {
-        await OnViewChange.InvokeAsync(view);
+        Loc.OnLanguageChanged += Refresh;
+        NavState.OnViewChanged += HandleViewChanged;
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    private void HandleViewChanged(string view)
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void SetView(string view)
+    {
+        NavState.CurrentView = view;
+    }
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= Refresh;
+        NavState.OnViewChanged -= HandleViewChanged;
     }
 }

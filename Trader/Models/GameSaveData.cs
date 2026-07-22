@@ -26,6 +26,9 @@ namespace EconomicGame.Models
         // Stock Market State
         public List<StockSaveData> Stocks { get; set; } = new();
         public DateTime LastDividendPaid { get; set; }
+
+        // Bar cash desk (economy rebalance). Defaults keep old saves compatible.
+        public decimal BarBankroll { get; set; } = 25000m;
     }
 
     public class PlayerSaveData
@@ -40,12 +43,15 @@ namespace EconomicGame.Models
         
         // Vehicle
         public VehicleSave? Vehicle { get; set; }
+        public List<VehicleSave> Vehicles { get; set; } = new();
         
         // Property
         public PropertySave? Property { get; set; }
+        public List<PropertySave> Properties { get; set; } = new();
         
         // Land & Warehouses (multi-warehouse)
         public LandSave? Land { get; set; }
+        public List<LandSave> Lands { get; set; } = new();
         public List<WarehouseSave> Warehouses { get; set; } = new();
         public List<IndustrialFactorySave> Factories { get; set; } = new();
         
@@ -59,6 +65,14 @@ namespace EconomicGame.Models
         // Bar state
         public int IntoxicationLevel { get; set; }
         public DateTime? SoberUpTime { get; set; }
+        public decimal BarWinningsToday { get; set; }
+        public DateTime? BarWinningsDate { get; set; }
+
+        // Poker stats
+        public int PokerHandsPlayed { get; set; }
+        public int PokerHandsWon { get; set; }
+        public decimal PokerProfit { get; set; }
+        public decimal PokerBiggestPot { get; set; }
 
         // Bank
         public decimal BankDeposit { get; set; }
@@ -66,6 +80,13 @@ namespace EconomicGame.Models
         // Stock Portfolio
         public StockPortfolioSave? Portfolio { get; set; }
         public decimal DividendIncome { get; set; }
+        
+        // Auto-production limits
+        public List<Guid> AutoProductionRecipes { get; set; } = new();
+        public Dictionary<Guid, int> AutoProductionMinReserves { get; set; } = new();
+        public Dictionary<Guid, int> AutoProductionMaxStock { get; set; } = new();
+        public Dictionary<Guid, int> AutoProductionLevels { get; set; } = new();
+        public Dictionary<Guid, int> AutoProductionProgress { get; set; } = new();
 
         // AI specific
         public bool IsAI { get; set; }
@@ -111,6 +132,7 @@ namespace EconomicGame.Models
 
     public class LandSave
     {
+        public Guid Id { get; set; } = Guid.NewGuid();
         public LandType Type { get; set; }
         public string Name { get; set; } = "";
         public decimal PurchasePrice { get; set; }
@@ -145,6 +167,10 @@ namespace EconomicGame.Models
         public bool IsOperational { get; set; }
         public decimal EfficiencyMultiplier { get; set; }
         public int ProductionLevel { get; set; }
+
+        // Agriculture harvest cycle state
+        public DateTime? CurrentCycleStart { get; set; }
+        public bool IsDiseased { get; set; }
     }
 
     public class StockPortfolioSave

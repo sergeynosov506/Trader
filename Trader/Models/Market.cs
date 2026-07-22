@@ -14,6 +14,12 @@ namespace EconomicGame
         // AI Market Impact Tracking
         public decimal BuyVolume { get; set; }
         public decimal SellVolume { get; set; }
+
+        /// <summary>
+        /// Rolling sell-pressure (decays every tick). When it exceeds the market's
+        /// demand capacity for products, dumping is punished with extra price drops.
+        /// </summary>
+        public decimal AccumulatedSellPressure { get; set; }
     }
 
     public class Market

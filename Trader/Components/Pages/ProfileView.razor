@@ -1,0 +1,298 @@
+@inject LocalizationService Loc
+@inject EconomicGame.Services.GameEngine GameEngine
+@inject EconomicGame.Services.ScenarioService ScenarioService
+@implements IDisposable
+
+<div class="profile-view">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>@Loc["profile.title"]</h2>
+        @if (!string.IsNullOrEmpty(Player?.ActiveScenarioId))
+        {
+            var scenario = ScenarioService.GetScenario(Player.ActiveScenarioId);
+            <span class="badge bg-warning text-dark fs-6 px-3 py-2 shadow-sm border border-warning">
+                🏆 @Loc["profile.scenario"]: @(scenario != null ? Loc[scenario.NameKey] : Player.ActiveScenarioId)
+            </span>
+        }
+        else
+        {
+            <span class="badge bg-secondary fs-6 px-3 py-2 shadow-sm border border-secondary text-white opacity-75">
+                🌍 @Loc["profile.freeplay"]
+            </span>
+        }
+    </div>
+
+    @if (Player == null)
+    {
+        <div class="alert alert-info">@Loc["bank.create_character"]</div>
+    }
+    else
+    {
+        <div class="row g-4 mb-4">
+            <!-- Career & Progress Card -->
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0 glass-card">
+                    <div class="card-header bg-gradient-primary text-white py-3 border-0">
+                        <h5 class="card-title mb-0 d-flex align-items-center gap-2">
+                            <span>💼</span> @Loc["profile.reputation"] & @Loc["profile.license"]
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Player Name -->
+                        <div class="mb-4 text-center">
+                            <div class="display-6 fw-bold text-primary">@Player.Name</div>
+                            <small class="text-muted text-uppercase fw-bold tracking-wider">Active Career</small>
+                        </div>
+
+                        <hr class="my-3 opacity-25" />
+
+                        <!-- License Level -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted fw-semibold">@Loc["profile.license"]:</span>
+                                <span class="badge bg-primary px-2 py-1">Lv. @Player.TradingLicenseLevel</span>
+                            </div>
+                            <div class="fw-bold text-end text-dark">
+                                @GetLicenseLabel(Player.TradingLicenseLevel)
+                            </div>
+                        </div>
+
+                        <!-- Reputation Progress -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted fw-semibold">@Loc["profile.reputation"]:</span>
+                                <span class="fw-bold text-warning">⭐ @Player.Reputation / 100</span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-warning" role="progressbar" style="width: @(Player.Reputation)%;" aria-valuenow="@Player.Reputation" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+
+                        <!-- Trade Volume -->
+                        <div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted fw-semibold">@Loc["profile.trade_volume"]:</span>
+                                <span class="fw-bold text-success">@Player.TradeVolume.ToString("C")</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trading Performance Card -->
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0 glass-card">
+                    <div class="card-header bg-gradient-success text-white py-3 border-0">
+                        <h5 class="card-title mb-0 d-flex align-items-center gap-2">
+                            <span>📊</span> @Loc["profile.statistics"]
+                        </h5>
+                    </div>
+                    <div class="card-body d-flex flex-column justify-content-between">
+                        <div>
+                            <!-- Success Rate Ring -->
+                            <div class="text-center py-3 position-relative">
+                                @{
+                                    var winPercentage = (int)(Player.SuccessScore * 100m);
+                                    var ringColor = winPercentage >= 70 ? "text-success" : winPercentage >= 40 ? "text-warning" : "text-danger";
+                                }
+                                <div class="display-3 fw-bold @ringColor">@winPercentage%</div>
+                                <div class="text-muted fw-bold small text-uppercase mt-1">@Loc["profile.success_rate"]</div>
+                            </div>
+
+                            <hr class="my-3 opacity-25" />
+
+                            <!-- Total & Profitable Trades -->
+                            <div class="d-flex justify-content-around text-center mb-3">
+                                <div>
+                                    <div class="h3 fw-bold text-dark mb-0">@Player.TotalTrades</div>
+                                    <small class="text-muted">@Loc["profile.total_trades"]</small>
+                                </div>
+                                <div class="vr opacity-25"></div>
+                                <div>
+                                    <div class="h3 fw-bold text-success mb-0">@Player.ProfitableTrades</div>
+                                    <small class="text-muted">@Loc["profile.profitable_trades"]</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Interactive tip based on performance -->
+                        <div class="alert alert-light border-0 small mb-0 py-2 text-center text-muted">
+                            💡 @(winPercentage >= 60 ? "Превосходные показатели! Ваши торговые решения стабильно прибыльны." : "Совет: покупайте товары ниже средней цены (Avg Price) и продавайте на пике спроса.")
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assets Allocation Card -->
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0 glass-card">
+                    <div class="card-header bg-gradient-info text-white py-3 border-0">
+                        <h5 class="card-title mb-0 d-flex align-items-center gap-2">
+                            <span>💰</span> @Loc["profile.assets_summary"]
+                        </h5>
+                    </div>
+                    <div class="card-body p-0 d-flex flex-column justify-content-between">
+                        <!-- Valuation Summary -->
+                        <div class="p-3 bg-light border-bottom text-center">
+                            @{
+                                var m2mNetWorth = Player.ComputeMarketNetWorth(GameEngine.ExchangeItems);
+                            }
+                            <div class="h6 text-muted mb-1 text-uppercase tracking-wider">@Loc["profile.net_worth"]</div>
+                            <div class="h3 fw-bold text-primary mb-0">@m2mNetWorth.ToString("C")</div>
+                        </div>
+
+                        <!-- Asset list -->
+                        <div class="px-3 py-2 overflow-auto small" style="max-height: 180px;">
+                            <div class="d-flex justify-content-between py-1 border-bottom border-light">
+                                <span>💵 @Loc["bank.cash"]</span>
+                                <span class="fw-bold">@Player.Money.ToString("C")</span>
+                            </div>
+                            <div class="d-flex justify-content-between py-1 border-bottom border-light">
+                                <span>🏦 @Loc["bank.on_deposit"]</span>
+                                <span class="fw-bold text-info">@Player.BankDeposit.ToString("C")</span>
+                            </div>
+                            <div class="d-flex justify-content-between py-1 border-bottom border-light">
+                                <span>📦 @Loc["log.factories_list"] (@Player.Factories.Count)</span>
+                                <span class="fw-bold">@Player.Factories.Sum(f => f.PurchasePrice * 0.5m).ToString("C")</span>
+                            </div>
+                            <div class="d-flex justify-content-between py-1 border-bottom border-light">
+                                <span>🏭 @Loc["prod.warehouse"] (@Player.Warehouses.Count)</span>
+                                <span class="fw-bold">@Player.Warehouses.Sum(w => w.PurchasePrice * 0.5m).ToString("C")</span>
+                            </div>
+                            <div class="d-flex justify-content-between py-1 border-bottom border-light">
+                                <span>🏞️ @Loc["log.my_land_plots"] (@Player.Lands.Count)</span>
+                                <span class="fw-bold">@((Player.Lands.Sum(l => l.PurchasePrice) * 0.7m).ToString("C"))</span>
+                            </div>
+                            <div class="d-flex justify-content-between py-1 border-bottom border-light">
+                                <span>🚢 @Loc["log.my_fleet"] (@Player.Vehicles.Count)</span>
+                                <span class="fw-bold">@Player.Vehicles.Sum(v => v.PurchasePrice * 0.5m).ToString("C")</span>
+                            </div>
+                            <div class="d-flex justify-content-between py-1 border-bottom border-light">
+                                <span>🏠 @Loc["nav.housing"] (@Player.Properties.Count)</span>
+                                <span class="fw-bold">@((Player.Properties.Sum(p => p.PurchasePrice) * 0.7m).ToString("C"))</span>
+                            </div>
+                            @if (Player.Loans.Any())
+                            {
+                                <div class="d-flex justify-content-between py-1 text-danger fw-bold">
+                                    <span>💳 @Loc["bank.debt"]</span>
+                                    <span>-@Player.Loans.Sum(l => l.Amount + l.Penalty).ToString("C")</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Development History (Monthly Reports Timeline) -->
+        <div class="card border-0 shadow-sm glass-card mb-3">
+            <div class="card-header bg-light border-0 py-3 d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0 d-flex align-items-center gap-2 text-dark fw-bold">
+                    <span>📈</span> @Loc["profile.development_history"]
+                </h5>
+                <span class="badge bg-secondary">@Player.MonthlyReports.Count @Loc["bank.report_history"]</span>
+            </div>
+            <div class="card-body p-0">
+                @if (Player.MonthlyReports == null || !Player.MonthlyReports.Any())
+                {
+                    <div class="p-4 text-center text-muted">
+                        <div class="fs-1 mb-2">🗓️</div>
+                        <p class="mb-0">@Loc["profile.no_reports"]</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-dark text-nowrap">
+                                <tr>
+                                    <th class="ps-3">#</th>
+                                    <th>@Loc["profile.col_month"]</th>
+                                    <th>@Loc["profile.col_day"]</th>
+                                    <th class="text-end">@Loc["profile.col_income"]</th>
+                                    <th class="text-end">@Loc["profile.col_expenses"]</th>
+                                    <th class="text-end">@Loc["profile.col_net_change"]</th>
+                                    <th class="text-end pe-3">@Loc["profile.col_ending_balance"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    var reports = Player.MonthlyReports.ToList();
+                                    for (int i = 0; i < reports.Count; i++)
+                                    {
+                                        var report = reports[reports.Count - 1 - i]; // Reverse chronological
+                                        var index = reports.Count - i;
+                                        <tr class="text-nowrap">
+                                            <td class="ps-3 fw-bold text-muted">#@index</td>
+                                            <td class="fw-semibold">@report.Month</td>
+                                            <td>@Loc["bank.day_n"] @report.Day</td>
+                                            <td class="text-end text-success font-monospace">+@report.TotalIncome.ToString("C")</td>
+                                            <td class="text-end text-danger font-monospace">-@report.TotalExpenses.ToString("C")</td>
+                                            <td class="text-end font-monospace fw-bold @(report.NetChange >= 0 ? "text-success" : "text-danger")">
+                                                @(report.NetChange >= 0 ? "+" : "")@report.NetChange.ToString("C")
+                                            </td>
+                                            <td class="text-end pe-3 font-monospace fw-bold text-primary">@report.EndingBalance.ToString("C")</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public EconomicGame.Player? Player { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Loc.OnLanguageChanged += Refresh;
+        GameEngine.OnStateChanged += Refresh;
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= Refresh;
+        GameEngine.OnStateChanged -= Refresh;
+    }
+
+    private string GetLicenseLabel(int level) => level switch
+    {
+        1 => Loc["profile.license_level_1"],
+        2 => Loc["profile.license_level_2"],
+        3 => Loc["profile.license_level_3"],
+        _ => Loc["profile.license_level_0"]
+    };
+}
+
+<style>
+    .glass-card {
+        background: rgba(255, 255, 255, 0.7) !important;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.4) !important;
+        border-radius: 12px !important;
+        overflow: hidden;
+    }
+
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #1b6ec2 0%, #004d80 100%) !important;
+    }
+
+    .bg-gradient-success {
+        background: linear-gradient(135deg, #28a745 0%, #1c7430 100%) !important;
+    }
+
+    .bg-gradient-info {
+        background: linear-gradient(135deg, #17a2b8 0%, #117a8b 100%) !important;
+    }
+
+    .tracking-wider {
+        letter-spacing: 0.05em;
+    }
+</style>

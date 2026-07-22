@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using EconomicGame.Configuration;
 
 namespace EconomicGame
@@ -93,43 +94,18 @@ namespace EconomicGame
             
             var daysSinceLastPayment = (currentTime - player.LastInterestPaid.Value).Days;
             if (daysSinceLastPayment < GameConstants.DepositInterestPaymentDays) return 0;
-            
+
             // Weekly interest (annual rate / 52 weeks)
             var weeklyRate = GetDepositInterestRate() / 52m;
             var weeks = daysSinceLastPayment / 7;
             var interest = player.BankDeposit * weeklyRate * weeks;
-            
+
             player.BankDeposit += interest;
             player.MonthlyIncome += interest;
-            player.LastInterestPaid = currentTime;
-            
-            return interest;
-        }
+            // Advance exactly by the whole weeks paid out so fractional days carry forward
+            player.LastInterestPaid = player.LastInterestPaid.Value.AddDays(weeks * 7);
 
-        public void TakeLoan(Player player, decimal amount, int months)
-        {
-            var loan = new Loan
-            {
-                Amount = amount,
-                InterestRate = CurrentInterestRate,
-                DueDate = DateTime.Now.AddMonths(months) // Ideally use GameTime, but Loan model stores DateTime. 
-                // Wait, if GameEngine.CurrentTime is used for checking, DueDate should be relative to that?
-                // For simplicity in this iteration, assuming Date mapping is consistent.
-                // Or better: We should pass CurrentTime to TakeLoan.
-                // Let's assume for now 1 game day = 1 real day in DateTime logic if we are using CurrentTime ticks.
-                // Actually, GameEngine adds 15 mins. So days pass fast. "Months" in UI should probably mean "Game Days" or "Game Weeks"?
-                // Let's stick to DateTime.Now for creation if checking against DateTime.Now, BUT plan said CheckLoans uses CurrentTime.
-                // So checking logic needs to match creation logic. 
-                // FIX: Update DueDate to be relative to GameEngine.CurrentTime passed in.
-            };
-            // Since I can't easily change signature in UI without breaking it, I'll stick to DateTime logic 
-            // BUT GameEngine.CurrentTime is what drives the game.
-            // I will update TakeLoan signature later or now? 
-            // Let's rely on CheckLoans passing the reference time.
-            
-            // Revert: I will use the passed 'currentTime' in CheckLoans. 
-            // But TakeLoan needs to know "Now".
-            // Adding 'DateTime currentTime' to TakeLoan.
+            return interest;
         }
 
         public void TakeLoan(Player player, decimal amount, int months, DateTime currentTime)
@@ -209,28 +185,45 @@ namespace EconomicGame
                 }
             }
 
-            // Step 3: Vehicle (50% value)
-            if (player.Vehicle != null)
+            // Step 3: Vehicles (50% of purchase price)
+            foreach (var vehicle in player.Vehicles.ToList())
             {
-                var vehicleValue = 1000m; // Basic Car cost 2000, sell 1000
+                var vehicleValue = vehicle.PurchasePrice * 0.5m;
                 if (vehicleValue >= totalDebt)
                 {
-                    player.Vehicle = null;
+                    player.Vehicles.Remove(vehicle);
                     player.Loans.Remove(loan);
                     return;
                 }
                 else
                 {
                     totalDebt -= vehicleValue;
-                    player.Vehicle = null;
+                    player.Vehicles.Remove(vehicle);
                 }
             }
 
-            // Step 4: Bankruptcy
+            // Step 4: Warehouses (50% of purchase price)
+            foreach (var warehouse in player.Warehouses.ToList())
+            {
+                // Only seize empty warehouses to avoid losing user's inventory invisibly
+                var remainingCapacity = player.Vehicles.Sum(v => v.CargoCapacity)
+                    + player.Warehouses.Where(w => w.WarehouseId != warehouse.WarehouseId).Sum(w => w.Capacity);
+                if (player.Inventory.Sum(i => i.Quantity) > remainingCapacity) break;
+
+                var value = warehouse.PurchasePrice * 0.5m;
+                if (value >= totalDebt)
+                {
+                    player.Warehouses.Remove(warehouse);
+                    player.Loans.Remove(loan);
+                    return;
+                }
+                totalDebt -= value;
+                player.Warehouses.Remove(warehouse);
+            }
+
+            // Step 5: Bankruptcy — still some debt, mark and drop loan
             player.IsBankrupt = true;
-            // Debt remains mostly unpaid...
-            player.Loans.Remove(loan); // Clear this specific loan loop? 
-            // Or keep it? Simpler to just clear it and mark bankrupt.
+            player.Loans.Remove(loan);
         }
     }
 }

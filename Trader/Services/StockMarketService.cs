@@ -17,10 +17,28 @@ namespace EconomicGame.Services
         public List<Stock> Stocks { get; private set; }
         public DateTime LastDividendPaid { get; set; } = DateTime.MinValue;
 
+        /// <summary>
+        /// Injected by the game loop each tick. Used to gate trading to market hours.
+        /// Falls back to the wall clock if never set, keeping existing tests green.
+        /// </summary>
+        public DateTime? CurrentGameTime { get; set; }
+
         public StockMarketService(PlayerService playerService)
         {
             _playerService = playerService;
             Stocks = StockDefinitions.CreateInitialStocks();
+        }
+
+        /// <summary>
+        /// Is the exchange currently open for trading? Honors configured open/close hours
+        /// and keeps the market closed on Saturday &amp; Sunday game-time.
+        /// </summary>
+        public bool IsMarketOpen(DateTime? gameTime = null)
+        {
+            var t = gameTime ?? CurrentGameTime ?? DateTime.Now;
+            if (t.DayOfWeek == DayOfWeek.Saturday || t.DayOfWeek == DayOfWeek.Sunday) return false;
+            return t.Hour >= GameConstants.StockMarketOpenHour
+                && t.Hour < GameConstants.StockMarketCloseHour;
         }
 
         /// <summary>
@@ -81,7 +99,8 @@ namespace EconomicGame.Services
         public string BuyStock(Player player, string ticker, int quantity)
         {
             if (player == null) return "Игрок не найден!";
-            
+            if (!IsMarketOpen()) return $"Биржа закрыта (работает {GameConstants.StockMarketOpenHour}:00–{GameConstants.StockMarketCloseHour}:00, пн-пт). Разместите лимитный ордер.";
+
             var stock = Stocks.FirstOrDefault(s => s.Ticker == ticker);
             if (stock == null) return "Акция не найдена!";
 
@@ -127,6 +146,7 @@ namespace EconomicGame.Services
         public string SellStock(Player player, string ticker, int quantity)
         {
             if (player == null) return "Игрок не найден!";
+            if (!IsMarketOpen()) return $"Биржа закрыта (работает {GameConstants.StockMarketOpenHour}:00–{GameConstants.StockMarketCloseHour}:00, пн-пт). Разместите лимитный ордер.";
 
             var stock = Stocks.FirstOrDefault(s => s.Ticker == ticker);
             if (stock == null) return "Акция не найдена!";
@@ -137,6 +157,11 @@ namespace EconomicGame.Services
             decimal totalRevenue = stock.SharePrice * quantity;
             decimal commission = totalRevenue * GameConstants.StockBrokerFee;
             decimal netRevenue = totalRevenue - commission;
+
+            // Capture avgBuy BEFORE we mutate the portfolio — otherwise closing a position
+            // deletes AvgBuyPrice[ticker] and P&L reports as zero.
+            var avgBuy = player.Portfolio.AvgBuyPrice.GetValueOrDefault(ticker, stock.SharePrice);
+            var profit = (stock.SharePrice - avgBuy) * quantity;
 
             // Execute sale
             player.Money += netRevenue;
@@ -151,9 +176,6 @@ namespace EconomicGame.Services
             }
 
             player.TradeVolume += totalRevenue;
-
-            var avgBuy = player.Portfolio.AvgBuyPrice.GetValueOrDefault(ticker, stock.SharePrice);
-            var profit = (stock.SharePrice - avgBuy) * quantity;
 
             return $"Продано {quantity} акций {stock.CompanyName} ({ticker}) по {stock.SharePrice:C} = {netRevenue:C} (после комиссии). P&L: {profit:+#,##0.00;-#,##0.00}";
         }
@@ -218,12 +240,20 @@ namespace EconomicGame.Services
 
                     if (shouldExecute)
                     {
-                        if (order.IsBuy)
-                            BuyStock(player, order.Ticker, order.Quantity);
-                        else
-                            SellStock(player, order.Ticker, order.Quantity);
-                        
-                        ordersToExecute.Add(order);
+                        // Only mark the order for removal if execution actually succeeded.
+                        // Otherwise insufficient funds / insufficient shares silently cancel
+                        // the user's pending order instead of keeping it active.
+                        var result = order.IsBuy
+                            ? BuyStock(player, order.Ticker, order.Quantity)
+                            : SellStock(player, order.Ticker, order.Quantity);
+
+                        // BuyStock returns "Куплено ..." on success; SellStock returns "Продано ...".
+                        // Anything else (e.g. "Не хватает денег!") means the order should stay pending.
+                        if (result.StartsWith("Куплено", StringComparison.Ordinal)
+                            || result.StartsWith("Продано", StringComparison.Ordinal))
+                        {
+                            ordersToExecute.Add(order);
+                        }
                     }
                 }
 

@@ -20,19 +20,26 @@ namespace EconomicGame.Services
             return 10000m + (target.Money * 0.05m);
         }
 
-        public string SabotageRival(Guid targetId, DateTime currentTime)
+        public string SabotageRival(Guid targetId, DateTime currentTime, Guid? actorId = null)
         {
-            var player = _playerService.GetCurrentPlayer();
-            if (player == null) return "Игрок не найден.";
+            var actor = actorId.HasValue 
+                ? _playerService.GetAllPlayers().FirstOrDefault(p => p.Id == actorId.Value)
+                : _playerService.GetCurrentPlayer();
+            if (actor == null) return "Игрок не найден.";
 
             var target = _playerService.GetAllPlayers().FirstOrDefault(p => p.Id == targetId);
             if (target == null) return "Цель не найдена.";
 
+            if (target.TradingLicenseLevel > 0)
+            {
+                return $"{target.Name} обладает торговой лицензией уровня {target.TradingLicenseLevel}, что делает их компанию полностью защищенной от саботажа и блокировок!";
+            }
+
             decimal cost = CalculateSabotageCost(target);
 
-            if (player.Money < cost) return $"Недостаточно средств. Стоимость саботажа {target.Name} составляет {cost:C}.";
+            if (actor.Money < cost) return $"Недостаточно средств. Стоимость саботажа {target.Name} составляет {cost:C}.";
 
-            player.Money -= cost;
+            actor.Money -= cost;
             target.IsSabotaged = true;
             target.SabotageEndTime = currentTime.AddHours(12); // Sabotaged for 12 game hours
             

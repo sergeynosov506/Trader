@@ -38,6 +38,21 @@ namespace EconomicGame
     /// </summary>
     public static class ProductionRecipes
     {
+        /// <summary>
+        /// RecipeIds must be STABLE across app restarts: they are persisted in saves
+        /// (AutoProductionRecipes) and would silently break auto-production for both
+        /// the player and the bots if regenerated each run. Derived from the recipe name.
+        /// </summary>
+        static ProductionRecipes()
+        {
+            foreach (var recipe in AllRecipes)
+            {
+                var hash = System.Security.Cryptography.MD5.HashData(
+                    System.Text.Encoding.UTF8.GetBytes("trader-recipe:" + recipe.Name));
+                recipe.RecipeId = new Guid(hash);
+            }
+        }
+
         public static List<ProductionRecipe> AllRecipes { get; } = new List<ProductionRecipe>
         {
             // Wheat -> Bread
@@ -46,10 +61,10 @@ namespace EconomicGame
                 Name = "Хлеб",
                 Description = "Превратите пшеницу в хлеб",
                 Emoji = "🍞",
-                Inputs = new Dictionary<string, int> { { GameConstants.Wheat, 10 } },
-                Outputs = new Dictionary<string, int> { { GameConstants.Bread, 8 } },
-                ProductionTime = 1,
-                ProductionCost = 50m
+                Inputs = new Dictionary<string, int> { { GameConstants.Wheat, GameConstants.BreadWheatInput } },
+                Outputs = new Dictionary<string, int> { { GameConstants.Bread, GameConstants.BreadOutput } },
+                ProductionTime = 4,
+                ProductionCost = GameConstants.BreadProductionCost
             },
             
             // Steel + Oil -> Goods (Machinery)
@@ -58,10 +73,10 @@ namespace EconomicGame
                 Name = "Оборудование",
                 Description = "Производство оборудования из стали и масла",
                 Emoji = "⚙️",
-                Inputs = new Dictionary<string, int> { { GameConstants.Steel, 5 }, { GameConstants.Oil, 3 } },
-                Outputs = new Dictionary<string, int> { { GameConstants.Goods, 4 } },
-                ProductionTime = 2,
-                ProductionCost = 100m
+                Inputs = new Dictionary<string, int> { { GameConstants.Steel, GameConstants.GoodsSteelInput }, { GameConstants.Oil, GameConstants.GoodsOilInput } },
+                Outputs = new Dictionary<string, int> { { GameConstants.Goods, GameConstants.GoodsOutput } },
+                ProductionTime = 8,
+                ProductionCost = GameConstants.GoodsProductionCost
             },
             
             // Copper + Gold -> Electronics
@@ -70,10 +85,10 @@ namespace EconomicGame
                 Name = "Электроника",
                 Description = "Производство электроники",
                 Emoji = "📱",
-                Inputs = new Dictionary<string, int> { { GameConstants.Copper, 8 }, { GameConstants.Gold, 2 } },
-                Outputs = new Dictionary<string, int> { { GameConstants.Electronics, 3 } },
-                ProductionTime = 3,
-                ProductionCost = 200m
+                Inputs = new Dictionary<string, int> { { GameConstants.Copper, GameConstants.ElectronicsCopperInput }, { GameConstants.Gold, GameConstants.ElectronicsGoldInput } },
+                Outputs = new Dictionary<string, int> { { GameConstants.Electronics, GameConstants.ElectronicsOutput } },
+                ProductionTime = 12,
+                ProductionCost = GameConstants.ElectronicsProductionCost
             },
             
             // Wheat + Oil -> Fuel (Biofuel)
@@ -84,7 +99,7 @@ namespace EconomicGame
                 Emoji = "⛽",
                 Inputs = new Dictionary<string, int> { { GameConstants.Wheat, 20 }, { GameConstants.Oil, 5 } },
                 Outputs = new Dictionary<string, int> { { GameConstants.Fuel, 10 } },
-                ProductionTime = 2,
+                ProductionTime = 8,
                 ProductionCost = 150m
             },
 
@@ -96,7 +111,7 @@ namespace EconomicGame
                 Emoji = "🍬",
                 Inputs = new Dictionary<string, int> { { GameConstants.SugarCane, 15 } },
                 Outputs = new Dictionary<string, int> { { GameConstants.Sugar, 10 } },
-                ProductionTime = 1,
+                ProductionTime = 16,
                 ProductionCost = 30m
             },
 
@@ -108,7 +123,7 @@ namespace EconomicGame
                 Emoji = "☕",
                 Inputs = new Dictionary<string, int> { { GameConstants.CoffeeBeans, 5 } },
                 Outputs = new Dictionary<string, int> { { GameConstants.Coffee, 2 } },
-                ProductionTime = 2,
+                ProductionTime = 8,
                 ProductionCost = 80m
             },
 
@@ -122,7 +137,7 @@ namespace EconomicGame
                 Emoji = "🧪",
                 Inputs = new Dictionary<string, int> { { GameConstants.Oil, GameConstants.ChemicalsOilInput }, { GameConstants.Copper, GameConstants.ChemicalsCopperInput } },
                 Outputs = new Dictionary<string, int> { { GameConstants.Chemicals, GameConstants.ChemicalsOutput } },
-                ProductionTime = 3,
+                ProductionTime = 12,
                 ProductionCost = GameConstants.ChemicalsProductionCost
             },
 
@@ -134,7 +149,7 @@ namespace EconomicGame
                 Emoji = "💊",
                 Inputs = new Dictionary<string, int> { { GameConstants.Chemicals, GameConstants.PharmChemicalsInput }, { GameConstants.SugarCane, GameConstants.PharmSugarCaneInput } },
                 Outputs = new Dictionary<string, int> { { GameConstants.Pharmaceuticals, GameConstants.PharmOutput } },
-                ProductionTime = 4,
+                ProductionTime = 16,
                 ProductionCost = GameConstants.PharmaceuticalsProductionCost
             },
 
@@ -150,7 +165,7 @@ namespace EconomicGame
                     { GameConstants.Electronics, GameConstants.LuxuryElectronicsInput }
                 },
                 Outputs = new Dictionary<string, int> { { GameConstants.LuxuryGoods, GameConstants.LuxuryOutput } },
-                ProductionTime = 5,
+                ProductionTime = 20,
                 ProductionCost = GameConstants.LuxuryGoodsProductionCost
             },
 
@@ -162,7 +177,7 @@ namespace EconomicGame
                 Emoji = "🧵",
                 Inputs = new Dictionary<string, int> { { GameConstants.Wheat, GameConstants.TextilesWheatInput }, { GameConstants.CoffeeBeans, GameConstants.TextilesCoffeeBeansInput } },
                 Outputs = new Dictionary<string, int> { { GameConstants.Textiles, GameConstants.TextilesOutput } },
-                ProductionTime = 2,
+                ProductionTime = 8,
                 ProductionCost = GameConstants.TextilesProductionCost
             }
         };
