@@ -50,17 +50,17 @@ main {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
 }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
+    .top-row a, .top-row .btn-link {
         white-space: nowrap;
         margin-left: 1.5rem;
         text-decoration: none;
     }
 
-    .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
+    .top-row a:hover, .top-row .btn-link:hover {
         text-decoration: underline;
     }
 
-    .top-row ::deep a:first-child {
+    .top-row a:first-child {
         overflow: hidden;
         text-overflow: ellipsis;
     }
@@ -70,7 +70,7 @@ main {
         justify-content: space-between;
     }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
+    .top-row a, .top-row .btn-link {
         margin-left: 0;
     }
 }
@@ -93,7 +93,7 @@ main {
         z-index: 1;
     }
 
-    .top-row.auth ::deep a:first-child {
+    .top-row.auth a:first-child {
         flex: 1;
         text-align: right;
         width: 0;
@@ -186,7 +186,7 @@ main {
         padding-bottom: 1rem;
     }
 
-    .nav-item ::deep .nav-link {
+    .nav-item .nav-link {
         color: #d7d7d7;
         background: none;
         border: none;
@@ -198,12 +198,12 @@ main {
         width: 100%;
     }
 
-.nav-item ::deep a.active {
+.nav-item a.active {
     background-color: rgba(255,255,255,0.37);
     color: white;
 }
 
-.nav-item ::deep .nav-link:hover {
+.nav-item .nav-link:hover {
     background-color: rgba(255,255,255,0.1);
     color: white;
 }

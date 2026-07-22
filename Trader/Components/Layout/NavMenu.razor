@@ -14,82 +14,82 @@
     <nav class="nav flex-column">
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "Market" ? "active" : "")" href="#" @onclick='() => SetView("Market")'>
-                @Loc["nav.market"]
+                <span class="me-2 fs-5">📈</span> @Loc["nav.market"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "StockExchange" ? "active" : "")" href="#" @onclick='() => SetView("StockExchange")'>
-                @Loc["nav.stock_exchange"]
+                <span class="me-2 fs-5">🏢</span> @Loc["nav.stock_exchange"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "StockMarket" ? "active" : "")" href="#" @onclick='() => SetView("StockMarket")'>
-                @Loc["nav.stock_market"]
+                <span class="me-2 fs-5">📊</span> @Loc["nav.stock_market"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "TradeListings" ? "active" : "")" href="#" @onclick='() => SetView("TradeListings")'>
-                @Loc["nav.trade_listings"]
+                <span class="me-2 fs-5">📋</span> @Loc["nav.trade_listings"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "Bank" ? "active" : "")" href="#" @onclick='() => SetView("Bank")'>
-                @Loc["nav.bank"]
+                <span class="me-2 fs-5">🏦</span> @Loc["nav.bank"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "Housing" ? "active" : "")" href="#" @onclick='() => SetView("Housing")'>
-                @Loc["nav.housing"]
+                <span class="me-2 fs-5">🏠</span> @Loc["nav.housing"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "Logistics" ? "active" : "")" href="#" @onclick='() => SetView("Logistics")'>
-                @Loc["nav.logistics"]
+                <span class="me-2 fs-5">🚚</span> @Loc["nav.logistics"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "Production" ? "active" : "")" href="#" @onclick='() => SetView("Production")'>
-                @Loc["nav.production"]
+                <span class="me-2 fs-5">🏭</span> @Loc["nav.production"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "Inventory" ? "active" : "")" href="#" @onclick='() => SetView("Inventory")'>
-                @Loc["nav.inventory"]
+                <span class="me-2 fs-5">🎒</span> @Loc["nav.inventory"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "Bar" ? "active" : "")" href="#" @onclick='() => SetView("Bar")'>
-                @Loc["nav.bar"]
+                <span class="me-2 fs-5">🍺</span> @Loc["nav.bar"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "Poker" ? "active" : "")" href="#" @onclick='() => SetView("Poker")'>
-                @Loc["nav.poker"]
+                <span class="me-2 fs-5">♠️</span> @Loc["nav.poker"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "Events" ? "active" : "")" href="#" @onclick='() => SetView("Events")'>
-                @Loc["nav.events"]
+                <span class="me-2 fs-5">📜</span> @Loc["nav.events"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "Scenarios" ? "active" : "")" href="#" @onclick='() => SetView("Scenarios")'>
-                @Loc["nav.scenarios"]
+                <span class="me-2 fs-5">🏁</span> @Loc["nav.scenarios"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "Save" ? "active" : "")" href="#" @onclick='() => SetView("Save")'>
-                @Loc["nav.save"]
+                <span class="me-2 fs-5">💾</span> @Loc["nav.save"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "AIPlayers" ? "active" : "")" href="#" @onclick='() => SetView("AIPlayers")'>
-                @Loc["nav.ai_traders"]
+                <span class="me-2 fs-5">🤖</span> @Loc["nav.ai_traders"]
             </a>
         </div>
         <div class="nav-item px-3">
             <a class="nav-link @(NavState.CurrentView == "Profile" ? "active" : "")" href="#" @onclick='() => SetView("Profile")'>
-                @Loc["nav.profile"]
+                <span class="me-2 fs-5">👤</span> @Loc["nav.profile"]
             </a>
         </div>
     </nav>
