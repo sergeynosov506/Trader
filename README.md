@@ -1,6 +1,10 @@
 # 🏙️ Trader — экономический симулятор против живого рынка из 100 ИИ-ботов
 
-*Economic life-sim where you trade, produce, gamble and play poker against 100 evolving AI bots with genetic strategies. Blazor Server, .NET 9. Russian UI (English partially available). Feedback and PRs welcome!*
+*Economic life-sim where you trade, produce, gamble and play poker against 100 evolving AI bots with genetic strategies. Blazor Server + WebAssembly, .NET 9. Russian UI (English partially available). Feedback and PRs welcome!*
+
+### ▶ [Играть в браузере / Play in browser](https://sergeynosov506.github.io/Trader/)
+
+*Работает прямо на телефоне — вся игра (движок, 100 ботов, покер) исполняется в браузере через Blazor WebAssembly, без сервера. Сейвы хранятся в localStorage устройства. Демо собирается автоматически из `main` через GitHub Actions.*
 
 Ты — начинающий торговец с $10 000 и легковушкой. Вокруг — живой рынок, который двигают **100 ИИ-ботов (X-Node)** с генетическими стратегиями: они торгуют, строят плантации и заводы, сбиваются в коалиции против тебя, объявляют тебя соперником, саботируют — и эволюционируют каждую игровую ночь. Твоя цель — подняться от ночёвок в машине до промышленной империи. Их цель — сделать это раньше тебя.
 

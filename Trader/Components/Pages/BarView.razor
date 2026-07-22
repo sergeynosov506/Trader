@@ -595,7 +595,7 @@
                                         <div class="col-4">
                                             <button class="btn btn-sm w-100 @(_diceTarget == t.Key ? "btn-success" : "btn-outline-light")"
                                                     @onclick="() => _diceTarget = t.Key">
-                                                @Loc[t.LocKey]<br/><small class="text-warning">x@t.Multiplier → @((_betAmount * t.Multiplier).ToString("C0"))</small>
+                                                @Loc[t.LocKey]<br/><small class="text-warning">x@(t.Multiplier) → @((_betAmount * t.Multiplier).ToString("C0"))</small>
                                             </button>
                                         </div>
                                     }
@@ -610,7 +610,7 @@
                             {
                                 <!-- Active dice game -->
                                 <div class="text-info small mb-2">
-                                    🎯 @Loc["bar.dice_target"]: <strong>@Loc[CurrentDiceTarget!.LocKey]</strong> (x@CurrentDiceTarget!.Multiplier)
+                                    🎯 @Loc["bar.dice_target"]: <strong>@Loc[CurrentDiceTarget!.LocKey]</strong> (x@(CurrentDiceTarget!.Multiplier))
                                     | 🎲 @Loc["bar.rolls_left"]: <strong>@_diceRollsLeft</strong> | @Loc["bar.bet"]: @_diceCurrentBet.ToString("C")
                                 </div>
                                 <p class="text-muted small">@Loc["bar.click_to_hold"]</p>

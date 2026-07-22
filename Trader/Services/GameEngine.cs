@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.AspNetCore.SignalR;
 using EconomicGame.Configuration;
 using EconomicGame.Extensions;
-using EconomicGame.Hubs;
 using EconomicGame.Models;
 using Microsoft.Extensions.Configuration;
 
@@ -18,7 +16,7 @@ namespace EconomicGame.Services
         public StockExchange StockExchange => _exchange;
         private readonly Bank _bank;
         private readonly List<News> _news;
-        private readonly IHubContext<GameHub> _hubContext;
+        private readonly IGameBroadcaster _broadcaster;
         private readonly PlayerService _playerService;
         private readonly SyncEngine _syncEngine;
         private readonly CorporateRivalryService _rivalryService;
@@ -69,7 +67,7 @@ namespace EconomicGame.Services
 
         public StockMarketService StockMarket => _stockMarketService;
 
-        public GameEngine(IHubContext<GameHub> hubContext, IConfiguration configuration, PlayerService playerService, SyncEngine syncEngine, CorporateRivalryService rivalryService, CorporateActionService actionService, InsuranceService insuranceService, StockMarketService stockMarketService, ScenarioService scenarioService)
+        public GameEngine(IGameBroadcaster broadcaster, IConfiguration configuration, PlayerService playerService, SyncEngine syncEngine, CorporateRivalryService rivalryService, CorporateActionService actionService, InsuranceService insuranceService, StockMarketService stockMarketService, ScenarioService scenarioService)
         {
             _market = new Market();
 
@@ -78,7 +76,7 @@ namespace EconomicGame.Services
 
             _bank = new Bank();
             _news = new List<News>();
-            _hubContext = hubContext;
+            _broadcaster = broadcaster;
             _playerService = playerService;
             _syncEngine = syncEngine;
             _rivalryService = rivalryService;
@@ -225,9 +223,9 @@ namespace EconomicGame.Services
             // Notify local subscribers (Server-side Blazor components) — once per tick
             OnStateChanged?.Invoke();
 
-            // Notify external clients (if any)
-            _hubContext.Clients.All.SendAsync("PriceUpdate", _exchange.Items);
-            _hubContext.Clients.All.SendAsync("NewsUpdate", _news.LastOrDefault());
+            // Notify external clients (if any) — no-op on hosts without SignalR (WASM)
+            _broadcaster.BroadcastPrices(_exchange.Items);
+            _broadcaster.BroadcastNews(_news.LastOrDefault());
         }
 
         #region Logging
@@ -815,7 +813,7 @@ namespace EconomicGame.Services
                 // 1. Cash constraint
                 if (recipe.ProductionCost > 0)
                 {
-                    int maxCashBatches = (int)(player.Money / recipe.ProductionCost);
+                    int maxCashBatches = (int)Math.Clamp(player.Money / recipe.ProductionCost, 0m, (decimal)int.MaxValue);
                     if (maxCashBatches < batches) batches = maxCashBatches;
                 }
 
@@ -842,7 +840,7 @@ namespace EconomicGame.Services
                 var netChangePerBatch = outputTotal - inputTotal;
                 if (netChangePerBatch > 0)
                 {
-                    int maxSpaceBatches = (int)(player.AvailableCargoSpace / netChangePerBatch);
+                    int maxSpaceBatches = (int)Math.Clamp(player.AvailableCargoSpace / netChangePerBatch, 0m, (decimal)int.MaxValue);
                     if (maxSpaceBatches < batches) batches = maxSpaceBatches;
                 }
 

@@ -31,7 +31,7 @@ namespace EconomicGame.Services
                 catch (Exception ex)
                 {
                     // Log error (you can add ILogger here if needed)
-                    Console.WriteLine($"Error in game tick: {ex.Message}");
+                    Console.WriteLine($"Error in game tick: {ex}");
                 }
             }
         }

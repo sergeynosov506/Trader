@@ -1,0 +1,58 @@
+.container-fluid {
+    height: 100vh;
+}
+
+.sidebar {
+    background-color: #1a1a2e;
+    color: white;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+@keyframes pulse-red {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+    70% { transform: scale(1.02); box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+}
+
+.animate-pulse {
+    animation: pulse-red 2s infinite;
+}
+
+.nav-link {
+    color: #ffffff;
+    padding: 10px;
+}
+
+    .nav-link:hover {
+        background-color: #495057;
+    }
+
+.main-content {
+    padding: 20px;
+}
+
+.news-ticker {
+    background-color: #f8d7da;
+    padding: 10px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.game-area {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+    .table th, .table td {
+        border: 1px solid #dee2e6;
+        padding: 8px;
+        text-align: left;
+    }

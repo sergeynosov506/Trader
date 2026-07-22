@@ -12,6 +12,8 @@ builder.Services.AddRazorComponents()
 builder.Services.AddSignalR(); // Keep for GameHub
 
 // Game services
+builder.Services.AddSingleton<EconomicGame.Services.IGameBroadcaster, EconomicGame.Services.SignalRGameBroadcaster>();
+builder.Services.AddSingleton<EconomicGame.Services.ISaveStorage, EconomicGame.Services.FileSaveStorage>();
 builder.Services.AddSingleton<PlayerService>();
 builder.Services.AddSingleton<StockMarketService>();
 builder.Services.AddSingleton<SyncEngine>();

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Keep the SAME root namespace as the server project so linked
+         components resolve to Trader.Components.* exactly like on the server -->
+    <RootNamespace>Trader</RootNamespace>
+    <!-- Full ICU so ToString("C") formats real currency; culture pinned to en-US in Program -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="9.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="9.0.9" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- The whole game is LINKED from the server project — one source of truth.
+       Excluded: server-only pieces (SignalR hub/broadcaster, hosted tick service,
+       file-based save storage, server Program & HTML shell). -->
+  <ItemGroup>
+    <Compile Include="..\Trader\**\*.cs"
+             Exclude="..\Trader\Program.cs;..\Trader\bin\**;..\Trader\obj\**;..\Trader\Hubs\**;..\Trader\Services\SignalRGameBroadcaster.cs;..\Trader\Services\GameTickService.cs;..\Trader\Services\FileSaveStorage.cs"
+             LinkBase="Linked" />
+    <!-- App.razor is the server HTML shell (index.html serves that role here);
+         Error.razor uses HttpContext, which doesn't exist in the browser. -->
+    <RazorComponent Include="..\Trader\Components\**\*.razor"
+                    Exclude="..\Trader\Components\App.razor;..\Trader\Components\Pages\Error.razor"
+                    LinkBase="Components" />
+  </ItemGroup>
+
+</Project>

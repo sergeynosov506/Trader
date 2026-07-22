@@ -13,35 +13,28 @@ namespace EconomicGame.Services
         private readonly PlayerService _playerService;
         private readonly GameEngine _gameEngine;
         private readonly StockMarketService _stockMarketService;
-        private readonly string _savePath;
+        private readonly ISaveStorage _storage;
 
-        public SaveGameService(PlayerService playerService, GameEngine gameEngine, StockMarketService stockMarketService)
+        public SaveGameService(PlayerService playerService, GameEngine gameEngine, StockMarketService stockMarketService, ISaveStorage storage)
         {
             _playerService = playerService;
             _gameEngine = gameEngine;
-            
-            // Save to user's AppData
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            _savePath = Path.Combine(appData, "Trader", "Saves");
-            Directory.CreateDirectory(_savePath);
+            _storage = storage;
             _stockMarketService = stockMarketService;
         }
 
         public List<(string FileName, GameSaveData Data)> GetSaveFiles()
         {
             var saves = new List<(string, GameSaveData)>();
-            
-            if (!Directory.Exists(_savePath)) return saves;
 
-            foreach (var file in Directory.GetFiles(_savePath, "*.json"))
+            foreach (var (name, json) in _storage.ReadAll())
             {
                 try
                 {
-                    var json = File.ReadAllText(file);
                     var data = JsonSerializer.Deserialize<GameSaveData>(json);
                     if (data != null)
                     {
-                        saves.Add((Path.GetFileNameWithoutExtension(file), data));
+                        saves.Add((name, data));
                     }
                 }
                 catch { /* Skip corrupted saves */ }
@@ -108,9 +101,8 @@ namespace EconomicGame.Services
                     WriteIndented = true 
                 });
 
-                var fileName = $"{SanitizeFileName(saveName)}_{DateTime.Now:yyyyMMdd_HHmmss}.json";
-                var filePath = Path.Combine(_savePath, fileName);
-                File.WriteAllText(filePath, json);
+                var fileName = $"{SanitizeFileName(saveName)}_{DateTime.Now:yyyyMMdd_HHmmss}";
+                _storage.Write(fileName, json);
 
                 return $"✅ Игра сохранена: {saveName}";
             }
@@ -124,11 +116,10 @@ namespace EconomicGame.Services
         {
             try
             {
-                var filePath = Path.Combine(_savePath, fileName + ".json");
-                if (!File.Exists(filePath))
+                var json = _storage.Read(fileName);
+                if (json == null)
                     return "❌ Файл сохранения не найден!";
 
-                var json = File.ReadAllText(filePath);
                 var saveData = JsonSerializer.Deserialize<GameSaveData>(json);
 
                 if (saveData?.PlayerData == null)
@@ -199,10 +190,9 @@ namespace EconomicGame.Services
         {
             try
             {
-                var filePath = Path.Combine(_savePath, fileName + ".json");
-                if (File.Exists(filePath))
+                if (_storage.Exists(fileName))
                 {
-                    File.Delete(filePath);
+                    _storage.Delete(fileName);
                     return "✅ Сохранение удалено";
                 }
                 return "❌ Файл не найден";

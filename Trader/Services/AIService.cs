@@ -333,7 +333,7 @@ namespace EconomicGame.Services
                     // Escalation boost: more aggressive buying at higher levels
                     baseQuantity = (int)(baseQuantity * aggressionBoost);
 
-                    int affordable = (int)(ai.Money * GameConstants.AIPortfolioPercentPerTrade / item.CurrentPrice);
+                    int affordable = (item.CurrentPrice > 0m) ? (int)Math.Clamp(ai.Money * GameConstants.AIPortfolioPercentPerTrade / item.CurrentPrice, 0m, (decimal)int.MaxValue) : 0;
                     int quantityToBuy = Math.Min(affordable, baseQuantity);
 
                     // --- Phase 10: Bargain Hunting ---
@@ -471,7 +471,7 @@ namespace EconomicGame.Services
 
                     if (stock.SharePrice < buyBelow && stock.AvailableShares > 10)
                     {
-                        int maxAffordable = (int)(ai.Money * 0.15m / stock.SharePrice);
+                        int maxAffordable = (stock.SharePrice > 0m) ? (int)Math.Clamp(ai.Money * 0.15m / stock.SharePrice, 0m, (decimal)int.MaxValue) : 0;
                         int qty = Math.Min(Math.Min(maxAffordable, 50), stock.AvailableShares);
                         if (qty > 0)
                         {
