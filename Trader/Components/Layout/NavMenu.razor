@@ -2,15 +2,16 @@
 @inject LocalizationService Loc
 @implements IDisposable
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">@Loc["app.title"]</a>
+<div class="top-row ps-3 pe-3 navbar navbar-dark d-flex justify-content-between align-items-center">
+    <div class="container-fluid d-flex justify-content-between align-items-center p-0">
+        <a class="navbar-brand m-0" href="#" @onclick:preventDefault @onclick='() => SetView("Market")'>@Loc["app.title"]</a>
+        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
     </div>
 </div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+<div class="nav-scrollable @NavMenuCssClass">
     <nav class="nav flex-column">
         <div class="nav-item">
             <a class="nav-link @(NavState.CurrentView == "Market" ? "active" : "")" href="#" @onclick='() => SetView("Market")'>
@@ -96,6 +97,14 @@
 </div>
 
 @code {
+    private bool collapseNavMenu = true;
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
     protected override void OnInitialized()
     {
         Loc.OnLanguageChanged += Refresh;
@@ -112,6 +121,7 @@
     private void SetView(string view)
     {
         NavState.CurrentView = view;
+        collapseNavMenu = true;
     }
 
     public void Dispose()
