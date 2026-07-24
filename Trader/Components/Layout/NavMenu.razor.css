@@ -1,19 +1,30 @@
 .navbar-toggler {
-    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
-    width: 3.5rem;
-    height: 2.5rem;
+    padding: 0.35rem 0.65rem;
     color: white;
-    position: absolute;
-    top: 0.5rem;
-    right: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
     border-radius: 6px;
-    background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.85%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") no-repeat center/1.75rem rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.12) !important;
+    transition: all 0.2s ease;
 }
 
-.navbar-toggler:checked {
-    background-color: rgba(255, 255, 255, 0.25);
+.navbar-toggler:hover, .navbar-toggler:focus {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+    outline: none;
+}
+
+.navbar-toggler-icon {
+    display: inline-block;
+    width: 1.5em;
+    height: 1.5em;
+    vertical-align: middle;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.95%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2.5' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 100%;
 }
 
 .top-row {
@@ -97,22 +108,28 @@
 
 @media (max-width: 768px) {
     .navbar-toggler {
-        display: block;
+        display: inline-flex !important;
     }
 
-    .nav-scrollable {
+    .nav-scrollable.collapse {
         display: none !important;
     }
 
-    .navbar-toggler:checked ~ .nav-scrollable {
+    .nav-scrollable:not(.collapse) {
         display: block !important;
         height: auto !important;
         max-height: 80vh;
+        overflow-y: auto;
+        padding-bottom: 1rem;
     }
 }
 
 @media (min-width: 769px) {
     .navbar-toggler {
-        display: none;
+        display: none !important;
+    }
+
+    .nav-scrollable {
+        display: block !important;
     }
 }
