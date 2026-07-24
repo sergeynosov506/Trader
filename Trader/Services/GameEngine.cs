@@ -113,6 +113,8 @@ namespace EconomicGame.Services
 
         public void UpdateGameState()
         {
+            if (_playerService.GetCurrentPlayer() == null) return;
+
             var previousTime = CurrentTime;
             // Time dilation: the world slows down while you're at the bar
             CurrentTime = CurrentTime.AddMinutes(PlayerInBarZone ? GameConstants.BarTickMinutes : GameConstants.NormalTickMinutes);

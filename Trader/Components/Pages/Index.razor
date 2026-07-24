@@ -14,7 +14,10 @@
     <div class="main-content">
         <div class="d-flex justify-content-between align-items-center mb-3">
                 <h1>@Loc["home.welcome"]</h1>
-                <h3>@GameEngine.CurrentTime.ToString("t") (@Loc["home.day"] @((GameEngine.CurrentTime - DateTime.Today).Days + 1))</h3>
+                @if (_player != null)
+                {
+                    <h3>@GameEngine.CurrentTime.ToString("t") (@Loc["home.day"] @((GameEngine.CurrentTime - DateTime.Today).Days + 1))</h3>
+                }
             </div>
 
             @if (_player == null)
@@ -224,6 +227,7 @@
             }
 
             _player = PlayerService.GetOrCreatePlayer(_playerName);
+            GameEngine.SetCurrentTime(DateTime.Today.AddHours(8));
             StateHasChanged();
         }
     }

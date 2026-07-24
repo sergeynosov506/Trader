@@ -48,6 +48,8 @@ namespace EconomicGame.Services
 
         public void ProcessAIPlayers()
         {
+            if (_playerService.GetCurrentPlayer() == null) return;
+
             var aiPlayers = _playerService.GetAllPlayers().Where(p => p.IsAI).ToList();
 
             // Phase 2: React to latest news before processing trades
