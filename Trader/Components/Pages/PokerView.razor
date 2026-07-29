@@ -29,6 +29,27 @@
 }
 .poker-seat-folded { opacity: 0.45; }
 .poker-seat-turn { box-shadow: 0 0 12px 3px rgba(255,193,7,0.9); }
+@@media (max-width: 576px) {
+    .poker-felt {
+        border-radius: 40px !important;
+        border-width: 4px !important;
+        padding: 1rem !important;
+    }
+    .poker-playing-card {
+        width: 38px !important;
+        height: 54px !important;
+        margin: 1px !important;
+        font-size: 0.85rem !important;
+    }
+    .poker-seat-box {
+        min-width: 110px !important;
+        font-size: 0.8rem !important;
+        padding: 0.4rem !important;
+    }
+    .poker-view {
+        padding: 0.5rem !important;
+    }
+}
 </style>
 
 <div class="poker-view mt-4 border p-3" style="background: #16213e; color: #eee; border-radius: 12px;">
@@ -219,23 +240,25 @@
         }
         else
         {
-            <table class="table table-dark table-sm">
-                <thead><tr><th>#</th><th>Игрок</th><th>Раздач</th><th>Побед</th><th>Профит</th><th>Крупнейший банк</th></tr></thead>
-                <tbody>
-                    @{ int rank = 1; }
-                    @foreach (var row in board)
-                    {
-                        <tr class="@(row.Name == Player?.Name ? "table-active" : "")">
-                            <td>@(rank++)</td>
-                            <td>@(row.IsAI ? "🤖 " : "👤 ")@row.Name</td>
-                            <td>@row.Hands</td>
-                            <td>@row.Wins</td>
-                            <td class="@(row.Profit >= 0 ? "text-success" : "text-danger")">@row.Profit.ToString("C0")</td>
-                            <td>@row.BiggestPot.ToString("C0")</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="table table-dark table-sm">
+                    <thead><tr><th>#</th><th>Игрок</th><th>Раздач</th><th>Побед</th><th>Профит</th><th>Крупнейший банк</th></tr></thead>
+                    <tbody>
+                        @{ int rank = 1; }
+                        @foreach (var row in board)
+                        {
+                            <tr class="@(row.Name == Player?.Name ? "table-active" : "")">
+                                <td>@(rank++)</td>
+                                <td>@(row.IsAI ? "🤖 " : "👤 ")@row.Name</td>
+                                <td>@row.Hands</td>
+                                <td>@row.Wins</td>
+                                <td class="@(row.Profit >= 0 ? "text-success" : "text-danger")">@row.Profit.ToString("C0")</td>
+                                <td>@row.BiggestPot.ToString("C0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
     </div>
 </div>

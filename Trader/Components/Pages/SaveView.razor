@@ -71,40 +71,42 @@
                 }
                 else
                 {
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>@Loc["save.col_name"]</th>
-                                <th>@Loc["save.col_player"]</th>
-                                <th>@Loc["save.col_day"]</th>
-                                <th>@Loc["save.col_money"]</th>
-                                <th>@Loc["save.col_saved_at"]</th>
-                                <th>@Loc["save.col_actions"]</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var save in _saves)
-                            {
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
                                 <tr>
-                                    <td><strong>@save.Data.SaveName</strong></td>
-                                    <td>@save.Data.PlayerData?.Name</td>
-                                    <td>@string.Format(Loc["save.day_n"], save.Data.GameDay)</td>
-                                    <td>@(save.Data.PlayerData?.Money.ToString("C") ?? "-")</td>
-                                    <td class="text-muted small">@save.Data.SavedAt.ToString("g")</td>
-                                    <td>
-                                        <button class="btn btn-sm btn-success me-1"
-                                                @onclick="() => LoadGame(save.FileName)">
-                                            @Loc["save.load_btn"]
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-danger"
-                                                @onclick="() => DeleteSave(save.FileName)">
-                                            🗑️
-                                        </button>
-                                    </td>
+                                    <th>@Loc["save.col_name"]</th>
+                                    <th>@Loc["save.col_player"]</th>
+                                    <th>@Loc["save.col_day"]</th>
+                                    <th>@Loc["save.col_money"]</th>
+                                    <th>@Loc["save.col_saved_at"]</th>
+                                    <th>@Loc["save.col_actions"]</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @foreach (var save in _saves)
+                                {
+                                    <tr>
+                                        <td><strong>@save.Data.SaveName</strong></td>
+                                        <td>@save.Data.PlayerData?.Name</td>
+                                        <td>@string.Format(Loc["save.day_n"], save.Data.GameDay)</td>
+                                        <td>@(save.Data.PlayerData?.Money.ToString("C") ?? "-")</td>
+                                        <td class="text-muted small">@save.Data.SavedAt.ToString("g")</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-success me-1"
+                                                    @onclick="() => LoadGame(save.FileName)">
+                                                @Loc["save.load_btn"]
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    @onclick="() => DeleteSave(save.FileName)">
+                                                🗑️
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 }
             </div>
         </div>

@@ -16,46 +16,48 @@
 
     @if (_activeTab == "browse")
     {
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Seller</th>
-                    <th>Item</th>
-                    <th>Qty</th>
-                    <th>Price/Unit</th>
-                    <th>Total</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var listing in GameEngine.TradeListings)
-                {
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
                     <tr>
-                        <td>@listing.SellerName</td>
-                        <td>
-                            @listing.ItemName
-                            @if (listing.AutoRepeat)
-                            {
-                                <span class="badge bg-info ms-1" title="Auto-Repeat enabled">🔄</span>
-                            }
-                        </td>
-                        <td>@listing.Quantity</td>
-                        <td>@listing.PricePerUnit.ToString("C")</td>
-                        <td>@listing.TotalPrice.ToString("C")</td>
-                        <td>
-                            @if (listing.SellerId == Player?.Id)
-                            {
-                                <button class="btn btn-sm btn-danger" @onclick="() => CancelListing(listing)">Cancel (5% Fee)</button>
-                            }
-                            else
-                            {
-                                <button class="btn btn-sm btn-primary" @onclick="() => BuyListing(listing)">Buy</button>
-                            }
-                        </td>
+                        <th>Seller</th>
+                        <th>Item</th>
+                        <th>Qty</th>
+                        <th>Price/Unit</th>
+                        <th>Total</th>
+                        <th>Action</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var listing in GameEngine.TradeListings)
+                    {
+                        <tr>
+                            <td>@listing.SellerName</td>
+                            <td>
+                                @listing.ItemName
+                                @if (listing.AutoRepeat)
+                                {
+                                    <span class="badge bg-info ms-1" title="Auto-Repeat enabled">🔄</span>
+                                }
+                            </td>
+                            <td>@listing.Quantity</td>
+                            <td>@listing.PricePerUnit.ToString("C")</td>
+                            <td>@listing.TotalPrice.ToString("C")</td>
+                            <td>
+                                @if (listing.SellerId == Player?.Id)
+                                {
+                                    <button class="btn btn-sm btn-danger" @onclick="() => CancelListing(listing)">Cancel (5% Fee)</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-primary" @onclick="() => BuyListing(listing)">Buy</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     }
 
     @if (_activeTab == "create")

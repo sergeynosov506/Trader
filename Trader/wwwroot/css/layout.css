@@ -213,8 +213,8 @@ main {
     }
 
     .top-row, article {
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
     }
 
     .top-row a, .top-row .btn-link {
@@ -235,6 +235,42 @@ main {
         max-height: 80vh;
         overflow-y: auto;
         padding-bottom: 1rem;
+    }
+
+    .header-stats {
+        gap: 0.4rem !important;
+        flex-wrap: wrap;
+    }
+
+    .stat-badge {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 576px) {
+    html, body {
+        overflow-x: hidden;
+    }
+
+    .top-row {
+        padding-top: 0.35rem;
+        padding-bottom: 0.35rem;
+        gap: 0.5rem !important;
+    }
+
+    .stat-badge {
+        font-size: 0.75rem;
+        padding: 0.15rem 0.4rem;
+        gap: 0.25rem !important;
+    }
+
+    article.content {
+        padding-top: 0.75rem;
+    }
+
+    .card-body {
+        padding: 0.85rem !important;
     }
 }
 

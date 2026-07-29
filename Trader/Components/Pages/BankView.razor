@@ -176,47 +176,49 @@
                     <h5>@Loc["bank.active_loans"]</h5>
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>@Loc["bank.col_amount"]</th>
-                                <th>@Loc["bank.col_term"]</th>
-                                <th>@Loc["bank.col_penalty"]</th>
-                                <th>@Loc["bank.col_status"]</th>
-                                <th>@Loc["bank.col_action"]</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var loan in Player.Loans)
-                            {
-                                var daysLeft = (loan.DueDate - GameEngine.CurrentTime).Days;
-                                <tr class="@(loan.IsDefaulted ? "table-danger" : daysLeft < 7 ? "table-warning" : "")">
-                                    <td>@loan.Amount.ToString("C")</td>
-                                    <td>@(daysLeft > 0 ? $"{daysLeft} {Loc["bank.days_short"]}" : Loc["bank.overdue"])</td>
-                                    <td>@loan.Penalty.ToString("C")</td>
-                                    <td>
-                                        @if (loan.IsDefaulted)
-                                        {
-                                            <span class="badge bg-danger">@Loc["bank.overdue"]</span>
-                                        }
-                                        else if (daysLeft < 7)
-                                        {
-                                            <span class="badge bg-warning text-dark">@Loc["bank.soon"]</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge bg-success">@Loc["bank.active"]</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        <button class="btn btn-sm btn-success" @onclick="() => RepayLoan(loan)" disabled="@IsBankClosed">
-                                            @Loc["bank.repay"] (@((loan.Amount + loan.Penalty).ToString("C")))
-                                        </button>
-                                    </td>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>@Loc["bank.col_amount"]</th>
+                                    <th>@Loc["bank.col_term"]</th>
+                                    <th>@Loc["bank.col_penalty"]</th>
+                                    <th>@Loc["bank.col_status"]</th>
+                                    <th>@Loc["bank.col_action"]</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @foreach (var loan in Player.Loans)
+                                {
+                                    var daysLeft = (loan.DueDate - GameEngine.CurrentTime).Days;
+                                    <tr class="@(loan.IsDefaulted ? "table-danger" : daysLeft < 7 ? "table-warning" : "")">
+                                        <td>@loan.Amount.ToString("C")</td>
+                                        <td>@(daysLeft > 0 ? $"{daysLeft} {Loc["bank.days_short"]}" : Loc["bank.overdue"])</td>
+                                        <td>@loan.Penalty.ToString("C")</td>
+                                        <td>
+                                            @if (loan.IsDefaulted)
+                                            {
+                                                <span class="badge bg-danger">@Loc["bank.overdue"]</span>
+                                            }
+                                            else if (daysLeft < 7)
+                                            {
+                                                <span class="badge bg-warning text-dark">@Loc["bank.soon"]</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success">@Loc["bank.active"]</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-success" @onclick="() => RepayLoan(loan)" disabled="@IsBankClosed">
+                                                @Loc["bank.repay"] (@((loan.Amount + loan.Penalty).ToString("C")))
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         }
@@ -252,29 +254,31 @@
                 {
                     <hr />
                     <h6>@Loc["bank.report_history"]</h6>
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>@Loc["bank.col_day"]</th>
-                                <th>@Loc["bank.col_start"]</th>
-                                <th>@Loc["bank.col_end"]</th>
-                                <th>@Loc["bank.col_change"]</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var report in Player.MonthlyReports.TakeLast(5).Reverse())
-                            {
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
                                 <tr>
-                                    <td>@Loc["bank.day_n"] @report.Day</td>
-                                    <td>@report.StartingBalance.ToString("C")</td>
-                                    <td>@report.EndingBalance.ToString("C")</td>
-                                    <td class="@(report.NetChange >= 0 ? "text-success" : "text-danger")">
-                                        @(report.NetChange >= 0 ? "+" : "")@report.NetChange.ToString("C")
-                                    </td>
+                                    <th>@Loc["bank.col_day"]</th>
+                                    <th>@Loc["bank.col_start"]</th>
+                                    <th>@Loc["bank.col_end"]</th>
+                                    <th>@Loc["bank.col_change"]</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @foreach (var report in Player.MonthlyReports.TakeLast(5).Reverse())
+                                {
+                                    <tr>
+                                        <td>@Loc["bank.day_n"] @report.Day</td>
+                                        <td>@report.StartingBalance.ToString("C")</td>
+                                        <td>@report.EndingBalance.ToString("C")</td>
+                                        <td class="@(report.NetChange >= 0 ? "text-success" : "text-danger")">
+                                            @(report.NetChange >= 0 ? "+" : "")@report.NetChange.ToString("C")
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 }
             </div>
         </div>

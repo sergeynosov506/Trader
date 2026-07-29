@@ -42,40 +42,42 @@
                 <h5>@Loc["inv.raw_materials"]</h5>
             </div>
             <div class="card-body p-0">
-                <table class="table table-striped table-hover mb-0">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>@Loc["inv.item"]</th>
-                            <th>@Loc["market.price"]</th>
-                            <th>@Loc["market.available"]</th>
-                            <th>@Loc["market.history"]</th>
-                            <th>@Loc["market.actions"]</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var item in rawMaterials)
-                        {
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead class="table-dark">
                             <tr>
-                                <td><strong>@item.Name</strong></td>
-                                <td>@item.CurrentPrice.ToString("C")</td>
-                                <td>@item.AvailableQuantity</td>
-                                <td>
-                                    <button class="btn btn-sm btn-info" @onclick="() => ShowPriceHistory(item)">📈</button>
-                                </td>
-                                <td>
-                                    <input type="number" @bind="_quantities[item.ItemId]" min="1" max="@item.AvailableQuantity" class="form-control form-control-sm d-inline-block" style="width: 60px;" />
-                                    <button class="btn btn-sm btn-success" @onclick="() => BuyItem(item)">@Loc["market.buy"]</button>
-                                    <button class="btn btn-sm btn-warning" @onclick="() => SellItem(item)">@Loc["market.sell"]</button>
-                                    <button class="btn btn-sm btn-danger" @onclick="() => SellAllItem(item)" title="@Loc["exchange.sell_all"]">📤</button>
-                                    <div class="small text-muted mt-1" style="font-size: 0.75rem;">
-                                        💼 @Loc["exchange.trip_cargo"]: <span class="text-info">@Player.Vehicles.Sum(v => v.CargoCapacity)</span> |
-                                        📦 @Loc["exchange.warehouse_space"]: <span class="text-info">@Player.AvailableCargoSpace</span>
-                                    </div>
-                                </td>
+                                <th>@Loc["inv.item"]</th>
+                                <th>@Loc["market.price"]</th>
+                                <th>@Loc["market.available"]</th>
+                                <th>@Loc["market.history"]</th>
+                                <th>@Loc["market.actions"]</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in rawMaterials)
+                            {
+                                <tr>
+                                    <td><strong>@item.Name</strong></td>
+                                    <td>@item.CurrentPrice.ToString("C")</td>
+                                    <td>@item.AvailableQuantity</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info" @onclick="() => ShowPriceHistory(item)">📈</button>
+                                    </td>
+                                    <td>
+                                        <input type="number" @bind="_quantities[item.ItemId]" min="1" max="@item.AvailableQuantity" class="form-control form-control-sm d-inline-block" style="width: 60px;" />
+                                        <button class="btn btn-sm btn-success" @onclick="() => BuyItem(item)">@Loc["market.buy"]</button>
+                                        <button class="btn btn-sm btn-warning" @onclick="() => SellItem(item)">@Loc["market.sell"]</button>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => SellAllItem(item)" title="@Loc["exchange.sell_all"]">📤</button>
+                                        <div class="small text-muted mt-1" style="font-size: 0.75rem;">
+                                            💼 @Loc["exchange.trip_cargo"]: <span class="text-info">@Player.Vehicles.Sum(v => v.CargoCapacity)</span> |
+                                            📦 @Loc["exchange.warehouse_space"]: <span class="text-info">@Player.AvailableCargoSpace</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -85,40 +87,42 @@
                 <h5>@Loc["inv.products"]</h5>
             </div>
             <div class="card-body p-0">
-                <table class="table table-striped table-hover mb-0">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>@Loc["inv.item"]</th>
-                            <th>@Loc["market.price"]</th>
-                            <th>@Loc["market.available"]</th>
-                            <th>@Loc["market.history"]</th>
-                            <th>@Loc["market.actions"]</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var item in products)
-                        {
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead class="table-dark">
                             <tr>
-                                <td><strong>@item.Name</strong></td>
-                                <td>@item.CurrentPrice.ToString("C")</td>
-                                <td>@item.AvailableQuantity</td>
-                                <td>
-                                    <button class="btn btn-sm btn-info" @onclick="() => ShowPriceHistory(item)">📈</button>
-                                </td>
-                                <td>
-                                    <input type="number" @bind="_quantities[item.ItemId]" min="1" max="@item.AvailableQuantity" class="form-control form-control-sm d-inline-block" style="width: 60px;" />
-                                    <button class="btn btn-sm btn-success" @onclick="() => BuyItem(item)">@Loc["market.buy"]</button>
-                                    <button class="btn btn-sm btn-warning" @onclick="() => SellItem(item)">@Loc["market.sell"]</button>
-                                    <button class="btn btn-sm btn-danger" @onclick="() => SellAllItem(item)" title="@Loc["exchange.sell_all"]">📤</button>
-                                    <div class="small text-muted mt-1" style="font-size: 0.75rem;">
-                                        💼 @Loc["exchange.trip_cargo"]: <span class="text-info">@Player.Vehicles.Sum(v => v.CargoCapacity)</span> |
-                                        📦 @Loc["exchange.warehouse_space"]: <span class="text-info">@Player.AvailableCargoSpace</span>
-                                    </div>
-                                </td>
+                                <th>@Loc["inv.item"]</th>
+                                <th>@Loc["market.price"]</th>
+                                <th>@Loc["market.available"]</th>
+                                <th>@Loc["market.history"]</th>
+                                <th>@Loc["market.actions"]</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in products)
+                            {
+                                <tr>
+                                    <td><strong>@item.Name</strong></td>
+                                    <td>@item.CurrentPrice.ToString("C")</td>
+                                    <td>@item.AvailableQuantity</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info" @onclick="() => ShowPriceHistory(item)">📈</button>
+                                    </td>
+                                    <td>
+                                        <input type="number" @bind="_quantities[item.ItemId]" min="1" max="@item.AvailableQuantity" class="form-control form-control-sm d-inline-block" style="width: 60px;" />
+                                        <button class="btn btn-sm btn-success" @onclick="() => BuyItem(item)">@Loc["market.buy"]</button>
+                                        <button class="btn btn-sm btn-warning" @onclick="() => SellItem(item)">@Loc["market.sell"]</button>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => SellAllItem(item)" title="@Loc["exchange.sell_all"]">📤</button>
+                                        <div class="small text-muted mt-1" style="font-size: 0.75rem;">
+                                            💼 @Loc["exchange.trip_cargo"]: <span class="text-info">@Player.Vehicles.Sum(v => v.CargoCapacity)</span> |
+                                            📦 @Loc["exchange.warehouse_space"]: <span class="text-info">@Player.AvailableCargoSpace</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 

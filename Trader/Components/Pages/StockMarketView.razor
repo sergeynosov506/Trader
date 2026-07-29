@@ -85,7 +85,8 @@
                 <small>@Loc["stock.fee"]: @((GameConstants.StockBrokerFee * 100).ToString("F0"))%</small>
             </div>
             <div class="card-body p-0">
-                <table class="table table-striped table-hover mb-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
                             <th></th>
@@ -158,6 +159,7 @@
                         }
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
 
@@ -274,38 +276,40 @@
                     <h5 class="mb-0">@Loc["stock.my_portfolio"]</h5>
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-striped mb-0">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>@Loc["stock.ticker"]</th>
-                                <th>@Loc["stock.shares"]</th>
-                                <th>@Loc["stock.avg_buy"]</th>
-                                <th>@Loc["stock.current_price"]</th>
-                                <th>@Loc["stock.value"]</th>
-                                <th>P&L</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var holding in Player.Portfolio.Holdings)
-                            {
-                                var stock = StockMarketService.Stocks.FirstOrDefault(s => s.Ticker == holding.Key);
-                                if (stock == null) continue;
-                                var avgBuy = Player.Portfolio.AvgBuyPrice.GetValueOrDefault(holding.Key, stock.SharePrice);
-                                var value = stock.SharePrice * holding.Value;
-                                var holdPnl = (stock.SharePrice - avgBuy) * holding.Value;
-                                var holdPnlColor = holdPnl >= 0 ? "text-success" : "text-danger";
-
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead class="table-dark">
                                 <tr>
-                                    <td><strong>@stock.Emoji @holding.Key</strong></td>
-                                    <td>@holding.Value</td>
-                                    <td>@avgBuy.ToString("C")</td>
-                                    <td>@stock.SharePrice.ToString("C")</td>
-                                    <td><strong>@value.ToString("C")</strong></td>
-                                    <td class="@holdPnlColor"><strong>@holdPnl.ToString("+#,##0.00;-#,##0.00")</strong></td>
+                                    <th>@Loc["stock.ticker"]</th>
+                                    <th>@Loc["stock.shares"]</th>
+                                    <th>@Loc["stock.avg_buy"]</th>
+                                    <th>@Loc["stock.current_price"]</th>
+                                    <th>@Loc["stock.value"]</th>
+                                    <th>P&L</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @foreach (var holding in Player.Portfolio.Holdings)
+                                {
+                                    var stock = StockMarketService.Stocks.FirstOrDefault(s => s.Ticker == holding.Key);
+                                    if (stock == null) continue;
+                                    var avgBuy = Player.Portfolio.AvgBuyPrice.GetValueOrDefault(holding.Key, stock.SharePrice);
+                                    var value = stock.SharePrice * holding.Value;
+                                    var holdPnl = (stock.SharePrice - avgBuy) * holding.Value;
+                                    var holdPnlColor = holdPnl >= 0 ? "text-success" : "text-danger";
+
+                                    <tr>
+                                        <td><strong>@stock.Emoji @holding.Key</strong></td>
+                                        <td>@holding.Value</td>
+                                        <td>@avgBuy.ToString("C")</td>
+                                        <td>@stock.SharePrice.ToString("C")</td>
+                                        <td><strong>@value.ToString("C")</strong></td>
+                                        <td class="@holdPnlColor"><strong>@holdPnl.ToString("+#,##0.00;-#,##0.00")</strong></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         }
@@ -318,40 +322,42 @@
                     <h5 class="mb-0">@Loc["stock.pending_orders"]</h5>
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-striped mb-0">
-                        <thead>
-                            <tr>
-                                <th>@Loc["stock.ticker"]</th>
-                                <th>@Loc["stock.type"]</th>
-                                <th>@Loc["stock.action"]</th>
-                                <th>@Loc["stock.price"]</th>
-                                <th>@Loc["stock.qty_short"]</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var order in Player.Portfolio.PendingOrders)
-                            {
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead>
                                 <tr>
-                                    <td><strong>@order.Ticker</strong></td>
-                                    <td>
-                                        @(order.Type switch
-                                        {
-                                            OrderType.Limit => Loc["stock.order_limit"],
-                                            OrderType.StopLoss => Loc["stock.order_stoploss"],
-                                            _ => Loc["stock.order_market"]
-                                        })
-                                    </td>
-                                    <td>@(order.IsBuy ? Loc["stock.buy_green"] : Loc["stock.sell_red"])</td>
-                                    <td>@order.TargetPrice.ToString("C")</td>
-                                    <td>@order.Quantity</td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelOrder(order.OrderId)">@Loc["stock.cancel"]</button>
-                                    </td>
+                                    <th>@Loc["stock.ticker"]</th>
+                                    <th>@Loc["stock.type"]</th>
+                                    <th>@Loc["stock.action"]</th>
+                                    <th>@Loc["stock.price"]</th>
+                                    <th>@Loc["stock.qty_short"]</th>
+                                    <th></th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @foreach (var order in Player.Portfolio.PendingOrders)
+                                {
+                                    <tr>
+                                        <td><strong>@order.Ticker</strong></td>
+                                        <td>
+                                            @(order.Type switch
+                                            {
+                                                OrderType.Limit => Loc["stock.order_limit"],
+                                                OrderType.StopLoss => Loc["stock.order_stoploss"],
+                                                _ => Loc["stock.order_market"]
+                                            })
+                                        </td>
+                                        <td>@(order.IsBuy ? Loc["stock.buy_green"] : Loc["stock.sell_red"])</td>
+                                        <td>@order.TargetPrice.ToString("C")</td>
+                                        <td>@order.Quantity</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelOrder(order.OrderId)">@Loc["stock.cancel"]</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         }
