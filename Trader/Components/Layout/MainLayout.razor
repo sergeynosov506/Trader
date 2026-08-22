@@ -2,30 +2,41 @@
 @inject EconomicGame.Services.GameEngine GameEngine
 @inject EconomicGame.Services.PlayerService PlayerService
 @inject EconomicGame.Services.CorporateRivalryService RivalryService
+@inject EconomicGame.Services.SaveGameService SaveService
+@inject EconomicGame.Services.NavigationStateService NavState
 @inject LocalizationService Loc
 @implements IDisposable
 
 <div class="page">
-    <div class="sidebar">
+    <!-- Desktop Sidebar wrapper (hidden on mobile) -->
+    <div class="sidebar d-none d-md-block">
         <NavMenu />
     </div>
 
+    <!-- Main Game Viewport -->
     <main>
-        <div class="top-row px-4 d-flex align-items-center justify-content-between gap-3">
+        <!-- Sticky Top HUD -->
+        <header class="top-row px-2 px-md-3 d-flex align-items-center justify-content-between gap-2">
             @if (Player != null)
             {
-                <div class="d-flex align-items-center gap-3 flex-wrap header-stats">
+                <div class="d-flex align-items-center gap-2 flex-wrap header-stats">
                     <!-- Time & Day Badge -->
-                    <div class="stat-badge d-flex align-items-center gap-2">
-                        <span class="fs-5">🕒</span>
+                    <div class="stat-badge d-flex align-items-center gap-1">
+                        <span class="fs-6">🕒</span>
                         <span class="fw-bold text-primary">@GameEngine.CurrentTime.ToString("t")</span>
-                        <span class="text-muted">(@Loc["home.day"] @((GameEngine.CurrentTime - DateTime.Today).Days + 1))</span>
+                        <span class="text-muted small">(@Loc["home.day"] @((GameEngine.CurrentTime - DateTime.Today).Days + 1))</span>
                     </div>
 
                     <!-- Cash / Wallet Badge -->
-                    <div class="stat-badge d-flex align-items-center gap-2">
-                        <span class="fs-5">💵</span>
+                    <div class="stat-badge d-flex align-items-center gap-1">
+                        <span class="fs-6">💵</span>
                         <span class="fw-bold text-success">@Player.Money.ToString("C")</span>
+                    </div>
+
+                    <!-- Net Worth Badge (Desktop/Tablet) -->
+                    <div class="stat-badge d-none d-lg-flex align-items-center gap-1">
+                        <span class="fs-6">💎</span>
+                        <span class="fw-bold text-indigo" style="color: #4f46e5;">@Player.ComputeMarketNetWorth(GameEngine.ExchangeItems).ToString("C")</span>
                     </div>
 
                     <!-- AI Escalation Badge (If Active) -->
@@ -45,32 +56,68 @@
                             1 => Loc["escalation.competitive"],
                             _ => Loc["escalation.neutral"]
                         };
-                        <div class="stat-badge d-flex align-items-center gap-2 border @badgeClass">
+                        <div class="stat-badge d-flex align-items-center gap-1 border @badgeClass cursor-pointer" @onclick='() => NavState.CurrentView = "AIPlayers"'>
                             <span class="fw-bold">🚨 @escalationLabel (Lv.@escalation)</span>
-                            <span class="opacity-75">| @Loc["home.threat"]: @((Player.CorporateThreatLevel * 100).ToString("F0"))%</span>
+                            <span class="opacity-75 small">| @((Player.CorporateThreatLevel * 100).ToString("F0"))%</span>
                         </div>
                     }
                 </div>
             }
             else
             {
-                <div></div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="fs-4">🏙️</span>
+                    <span class="fw-bold text-dark">@Loc["app.title"]</span>
+                </div>
             }
 
-            <div class="d-flex align-items-center gap-3">
-                <LanguageToggle />
-                <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">@Loc["app.about"]</a>
-            </div>
-        </div>
+            <!-- Right Controls: Quick Save, Profile, Language, Toast -->
+            <div class="d-flex align-items-center gap-2">
+                @if (!string.IsNullOrEmpty(_saveToastMessage))
+                {
+                    <span class="badge bg-success text-white py-2 px-3 animate-fade-in shadow-sm">
+                        @_saveToastMessage
+                    </span>
+                }
 
-        <article class="content px-4">
+                @if (Player != null)
+                {
+                    <!-- Quick Save Button -->
+                    <button class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1 rounded-pill px-2 py-1"
+                            title="@Loc["nav.quick_save"]"
+                            @onclick="QuickSave">
+                        <span>💾</span>
+                        <span class="d-none d-sm-inline small fw-semibold">@Loc["nav.quick_save"]</span>
+                    </button>
+
+                    <!-- Profile Button -->
+                    <button class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 rounded-pill px-2 py-1"
+                            title="@Loc["nav.profile"]"
+                            @onclick='() => NavState.CurrentView = "Profile"'>
+                        <span>👤</span>
+                        <span class="d-none d-md-inline small">@Player.Name</span>
+                    </button>
+                }
+
+                <LanguageToggle />
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <article class="content px-2 px-md-4 py-3">
             @Body
         </article>
+
+        <!-- Mobile Bottom Nav Dock (Rendered here on mobile) -->
+        <div class="d-block d-md-none">
+            <NavMenu />
+        </div>
     </main>
 </div>
 
 @code {
     private EconomicGame.Player? Player => PlayerService.GetCurrentPlayer();
+    private string? _saveToastMessage;
 
     protected override void OnInitialized()
     {
@@ -79,6 +126,25 @@
     }
 
     private void Refresh() => InvokeAsync(StateHasChanged);
+
+    private async Task QuickSave()
+    {
+        if (Player == null) return;
+        try
+        {
+            var saveName = $"{Player.Name}_Autosave_{DateTime.Now:yyyyMMdd_HHmmss}";
+            SaveService.SaveGame(saveName);
+            _saveToastMessage = Loc["nav.saved_success"];
+            StateHasChanged();
+            await Task.Delay(2200);
+            _saveToastMessage = null;
+            StateHasChanged();
+        }
+        catch
+        {
+            // Ignore if save error
+        }
+    }
 
     public void Dispose()
     {

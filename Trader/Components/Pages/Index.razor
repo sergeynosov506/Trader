@@ -10,167 +10,162 @@
 @inject IJSRuntime JS
 @implements IDisposable
 
-<div class="container-fluid py-3">
-    <div class="main-content">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-                <h1>@Loc["home.welcome"]</h1>
-                @if (_player != null)
+<div class="container-fluid p-0">
+    @if (_player == null)
+    {
+        <!-- Character Creation / Welcome Card -->
+        <div class="row justify-content-center mt-4 mt-md-5">
+            <div class="col-12 col-md-6 col-lg-5">
+                <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+                    <div class="card-header text-white p-4 text-center" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+                        <div class="fs-1 mb-2">🏙️</div>
+                        <h2 class="fw-bold mb-1">@Loc["home.welcome"]</h2>
+                        <p class="text-white-50 small mb-0">Economic Simulation & AI Rivalry</p>
+                    </div>
+                    <div class="card-body p-4">
+                        <h5 class="fw-semibold mb-3">@Loc["home.enter_name"]</h5>
+                        <div class="mb-3">
+                            <input @bind="_playerName"
+                                   @bind:event="oninput"
+                                   @onkeyup="@(async e => { if (e.Key == "Enter") await CreatePlayer(); })"
+                                   placeholder="@Loc["home.player_name"]" 
+                                   class="form-control form-control-lg" />
+                        </div>
+                        <button @onclick="CreatePlayer" 
+                                class="btn btn-primary btn-lg w-100 fw-bold shadow-sm"
+                                disabled="@(string.IsNullOrWhiteSpace(_playerName))">
+                            🚀 @Loc["home.start_playing"]
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- High-Priority Alerts (Sabotage) -->
+        @if (_player.IsSabotaged)
+        {
+            <div class="alert alert-danger p-3 mb-3 shadow-sm rounded-3">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="fs-5">🚨</span>
+                    <strong class="h6 mb-0">@Loc["home.ops_blocked"]</strong>
+                </div>
+                <p class="mb-1 small">@Loc["home.ops_blocked_desc"]</p>
+                @if (_player.SabotageEndTime.HasValue)
                 {
-                    <h3>@GameEngine.CurrentTime.ToString("t") (@Loc["home.day"] @((GameEngine.CurrentTime - DateTime.Today).Days + 1))</h3>
+                    <small class="text-muted">@Loc["home.ops_recovery"]: @_player.SabotageEndTime.Value.ToString("t")</small>
                 }
             </div>
+        }
 
-            @if (_player == null)
-            {
-                <div class="card p-4">
-                    <h3>@Loc["home.enter_name"]</h3>
-                    <input @bind="_playerName" placeholder="@Loc["home.player_name"]" class="form-control mb-2" />
-                    <button @onclick="CreatePlayer" class="btn btn-primary">@Loc["home.start_playing"]</button>
+        <!-- Compact News Ticker Banner -->
+        @if (GameEngine.LatestNews != null)
+        {
+            <div class="news-banner d-flex align-items-center gap-2 px-3 py-2 mb-3 bg-white border rounded-3 shadow-sm">
+                <span class="badge bg-primary text-white text-uppercase" style="font-size: 0.7rem;">📰 News</span>
+                <div class="news-text small flex-grow-1 text-truncate">
+                    <strong>@GameEngine.LatestNews.Title</strong>: @GameEngine.LatestNews.Content
                 </div>
+                <span class="text-muted small d-none d-sm-inline">@GameEngine.LatestNews.Timestamp.ToShortTimeString()</span>
+            </div>
+        }
+
+        <!-- Active Game View Container -->
+        <div class="game-area">
+            @if (CurrentView == "Market")
+            {
+                <MarketView Player="@_player" ExchangeItems="@GameEngine.ExchangeItems" />
+            }
+            else if (CurrentView == "StockExchange")
+            {
+                <StockExchangeView Items="@GameEngine.ExchangeItems" Player="@_player" />
+            }
+            else if (CurrentView == "Bank")
+            {
+                <BankView Player="@_player" />
+            }
+            else if (CurrentView == "TradeListings")
+            {
+                <TradeListingsView Player="@_player" />
+            }
+            else if (CurrentView == "Housing")
+            {
+                <HousingView Player="@_player" />
+            }
+            else if (CurrentView == "Logistics")
+            {
+                <LogisticsView Player="@_player" />
+            }
+            else if (CurrentView == "Production")
+            {
+                <ProductionView Player="@_player" />
+            }
+            else if (CurrentView == "StockMarket")
+            {
+                <StockMarketView Player="@_player" />
+            }
+            else if (CurrentView == "Bar")
+            {
+                <BarView Player="@_player" />
+            }
+            else if (CurrentView == "Poker")
+            {
+                <PokerView Player="@_player" />
+            }
+            else if (CurrentView == "Inventory")
+            {
+                <InventoryView Player="@_player" />
+            }
+            else if (CurrentView == "Events")
+            {
+                <EventsView Player="@_player" />
+            }
+            else if (CurrentView == "Scenarios")
+            {
+                <ScenariosView Player="@_player" />
+            }
+            else if (CurrentView == "Save")
+            {
+                <SaveView Player="@_player" />
+            }
+            else if (CurrentView == "AIPlayers")
+            {
+                <AIPlayersView />
+            }
+            else if (CurrentView == "Profile")
+            {
+                <ProfileView Player="@_player" />
             }
             else
             {
-                <div class="player-info mb-3">
-                    <h4>@Loc["home.player"]: @_player.Name</h4>
-                    <p>@Loc["home.money"]: @_player.Money.ToString("C")</p>
-                    @if (_player.Factories.Any())
-                    {
-                        <p><strong>@Loc["home.industrial_power"]:</strong> @(_player.Factories.Count) @Loc["home.factories"] (@string.Join(" ", _player.Factories.ToList().Select(f => f.Emoji)))</p>
-                    }
-
-                    @if (_player.CorporateThreatLevel > 0.1m)
-                    {
-                        var escalation = RivalryService.CurrentEscalationLevel;
-                        var escalationClass = escalation switch { 3 => "alert-danger", 2 => "alert-warning", 1 => "alert-info", _ => "alert-secondary" };
-                        var escalationLabel = escalation switch
-                        {
-                            3 => Loc["escalation.hostile"],
-                            2 => Loc["escalation.aggressive"],
-                            1 => Loc["escalation.competitive"],
-                            _ => Loc["escalation.neutral"]
-                        };
-                        <div class="alert @escalationClass p-2 mb-2">
-                            <strong>@Loc["home.ai_escalation"]: @escalationLabel (Lv.@escalation)</strong>
-                            <span class="ms-2">@Loc["home.threat"]: @((_player.CorporateThreatLevel * 100).ToString("F0"))%</span>
-                            @if (_player.RivalPlayerIds.Any())
-                            {
-                                var rivals = _player.RivalPlayerIds.ToList();
-                                <div class="small">@Loc["home.rivals"]: @string.Join(", ", rivals.Select(id => PlayerService.GetAllPlayers().FirstOrDefault(p => p.Id == id)?.Name ?? "Unknown"))</div>
-                            }
-                            @if (RivalryService.CoalitionMembers.Any())
-                            {
-                                <div class="small text-danger">⚠️ @Loc["home.coalition"]: @RivalryService.CoalitionMembers.Count @Loc["home.coalition_bots"]</div>
-                            }
-                        </div>
-                    }
-
-                    @if (_player.IsSabotaged)
-                    {
-                        <div class="alert alert-danger p-3 mb-2 shadow animate-pulse">
-                            <h5 class="mb-1">@Loc["home.ops_blocked"]</h5>
-                            <p class="mb-0">@Loc["home.ops_blocked_desc"]</p>
-                            @if (_player.SabotageEndTime.HasValue)
-                            {
-                                <small>@Loc["home.ops_recovery"]: @(_player.SabotageEndTime.Value.ToString("t"))</small>
-                            }
-                        </div>
-                    }
-                </div>
-
-                <div class="news-ticker mb-3">
-                    @if (GameEngine.LatestNews != null)
-                    {
-                        <p><strong>@GameEngine.LatestNews.Title</strong>: @GameEngine.LatestNews.Content (@GameEngine.LatestNews.Timestamp.ToShortTimeString())</p>
-                    }
-                    else
-                    {
-                        <p>@Loc["home.no_news"]</p>
-                    }
-                </div>
-
-                <div class="game-area">
-                    @if (CurrentView == "Market")
-                    {
-                        <MarketView Player="@_player" ExchangeItems="@GameEngine.ExchangeItems" />
-                    }
-                    else if (CurrentView == "StockExchange")
-                    {
-                        <StockExchangeView Items="@GameEngine.ExchangeItems" Player="@_player" />
-                    }
-                    else if (CurrentView == "Bank")
-                    {
-                        <BankView Player="@_player" />
-                    }
-                    else if (CurrentView == "TradeListings")
-                    {
-                        <TradeListingsView Player="@_player" />
-                    }
-                    else if (CurrentView == "Housing")
-                    {
-                        <HousingView Player="@_player" />
-                    }
-                    else if (CurrentView == "Logistics")
-                    {
-                        <LogisticsView Player="@_player" />
-                    }
-                    else if (CurrentView == "Production")
-                    {
-                        <ProductionView Player="@_player" />
-                    }
-                    else if (CurrentView == "StockMarket")
-                    {
-                        <StockMarketView Player="@_player" />
-                    }
-                    else if (CurrentView == "Bar")
-                    {
-                        <BarView Player="@_player" />
-                    }
-                    else if (CurrentView == "Poker")
-                    {
-                        <PokerView Player="@_player" />
-                    }
-                    else if (CurrentView == "Inventory")
-                    {
-                        <InventoryView Player="@_player" />
-                    }
-                    else if (CurrentView == "Events")
-                    {
-                        <EventsView Player="@_player" />
-                    }
-                    else if (CurrentView == "Scenarios")
-                    {
-                        <ScenariosView Player="@_player" />
-                    }
-                    else if (CurrentView == "Save")
-                    {
-                        <SaveView Player="@_player" />
-                    }
-                    else if (CurrentView == "AIPlayers")
-                    {
-                        <AIPlayersView />
-                    }
-                    else if (CurrentView == "Profile")
-                    {
-                        <ProfileView Player="@_player" />
-                    }
-                    else
-                    {
-                        <p>@Loc["home.select_section"]</p>
-                    }
-                </div>
-
-                <div class="activity-log mt-4 p-3 bg-light border rounded">
-                   <h5>@Loc["home.market_activity"]</h5>
-                   <ul class="list-unstyled" style="max-height: 200px; overflow-y: auto;">
-                       @foreach (var log in GameEngine.MarketActivityLog)
-                       {
-                           <li class="small border-bottom py-1">@log</li>
-                       }
-                   </ul>
-                </div>
+                <div class="alert alert-info">@Loc["home.select_section"]</div>
             }
         </div>
-    </div>
+
+        <!-- Collapsible Market Activity Log -->
+        @if (GameEngine.MarketActivityLog.Any())
+        {
+            <details class="activity-accordion mt-4 bg-white border rounded-3 shadow-sm">
+                <summary class="px-3 py-2 fw-semibold text-secondary user-select-none d-flex align-items-center justify-content-between cursor-pointer">
+                    <span class="d-flex align-items-center gap-2 small">
+                        <span>📋</span>
+                        <span>@Loc["home.market_activity"]</span>
+                        <span class="badge bg-secondary-subtle text-secondary small">@GameEngine.MarketActivityLog.Count</span>
+                    </span>
+                </summary>
+                <div class="p-3 border-top bg-light-subtle">
+                    <ul class="list-unstyled mb-0 small" style="max-height: 180px; overflow-y: auto;">
+                        @foreach (var log in GameEngine.MarketActivityLog)
+                        {
+                            <li class="border-bottom border-secondary border-opacity-10 py-1">@log</li>
+                        }
+                    </ul>
+                </div>
+            </details>
+        }
+    }
+</div>
 
 @code {
     private string CurrentView { get; set; } = "Market";

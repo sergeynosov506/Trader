@@ -35,7 +35,7 @@ namespace EconomicGame.Configuration
         // Game Tick Settings
         public const int GameTickIntervalSeconds = 5;
         public const int NormalTickMinutes = 15;   // Game minutes per tick normally
-        public const int BarTickMinutes = 5;       // Time flows 3x slower while you're at the bar/poker table
+        public const int BarTickMinutes = 1;       // Time flows 15x slower (1 min/tick) while playing poker or at the bar
         
         // Trading Settings
         // (Car price moved to Vehicle Settings as BasicCarPrice to avoid duplication)
@@ -55,8 +55,8 @@ namespace EconomicGame.Configuration
         public const decimal MaxReputationDiscount = 0.10m;   // Up to 10% interest discount
         
         // Bar Settings
-        public const int BarOpenHour = 18;   // The bar opens in the evening...
-        public const int BarCloseHour = 2;   // ...and closes late at night (crosses midnight)
+        public const int BarOpenHour = 18;   // The bar opens in the evening (18:00)...
+        public const int BarCloseHour = 4;   // ...and closes at 04:00 at night
         public const decimal BeerPrice = 25m;
         public const decimal WhiskeyPrice = 50m;
         public const decimal CocktailPrice = 75m;
@@ -267,7 +267,7 @@ namespace EconomicGame.Configuration
         
         // Stock Market Settings (Investor Path)
         public const int StockMarketOpenHour = 9;
-        public const int StockMarketCloseHour = 17;
+        public const int StockMarketCloseHour = 18;
         public const decimal StockBrokerFee = 0.02m;             // 2% commission
         public const int DividendPaymentDays = 30;                // Dividends every 30 game days
         public const decimal MinDividendYield = 0.01m;            // 1% min yield

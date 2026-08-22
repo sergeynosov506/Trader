@@ -2,107 +2,296 @@
 @inject LocalizationService Loc
 @implements IDisposable
 
-<div class="top-row ps-3 pe-3 navbar navbar-dark d-flex justify-content-between align-items-center">
-    <div class="container-fluid d-flex justify-content-between align-items-center p-0">
-        <a class="navbar-brand m-0" href="#" @onclick:preventDefault @onclick='() => SetView("Market")'>@Loc["app.title"]</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
+<!-- ================= DESKTOP SIDEBAR ================= -->
+<div class="desktop-sidebar d-none d-md-flex flex-column">
+    <div class="sidebar-brand d-flex align-items-center justify-content-between px-3 py-3">
+        <a class="brand-link d-flex align-items-center gap-2 text-decoration-none text-white" href="#" @onclick:preventDefault @onclick='() => SetView("Market")'>
+            <span class="fs-4">🏙️</span>
+            <div>
+                <div class="brand-title fw-bold">@Loc["app.title"]</div>
+                <div class="brand-sub small text-white-50">Economy & AI Sim</div>
+            </div>
+        </a>
     </div>
-</div>
 
-<div class="nav-scrollable @NavMenuCssClass">
-    <nav class="nav flex-column">
+    <div class="sidebar-nav flex-grow-1 overflow-y-auto px-2 py-2">
+        <!-- 1. TRADE & MARKET -->
+        <div class="nav-category-header text-uppercase small px-2 mt-2 mb-1">
+            <span>📈 @Loc["nav.category.trade"]</span>
+        </div>
         <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "Market" ? "active" : "")" href="#" @onclick='() => SetView("Market")'>
-                <span class="nav-icon">📈</span> <span>@Loc["nav.market"]</span>
+            <a class="nav-link @(NavState.CurrentView == "Market" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("Market")'>
+                <span class="nav-icon">📊</span> <span>@Loc["nav.market"]</span>
             </a>
         </div>
         <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "StockExchange" ? "active" : "")" href="#" @onclick='() => SetView("StockExchange")'>
+            <a class="nav-link @(NavState.CurrentView == "StockExchange" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("StockExchange")'>
                 <span class="nav-icon">🏢</span> <span>@Loc["nav.stock_exchange"]</span>
             </a>
         </div>
         <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "StockMarket" ? "active" : "")" href="#" @onclick='() => SetView("StockMarket")'>
-                <span class="nav-icon">📊</span> <span>@Loc["nav.stock_market"]</span>
+            <a class="nav-link @(NavState.CurrentView == "StockMarket" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("StockMarket")'>
+                <span class="nav-icon">📈</span> <span>@Loc["nav.stock_market"]</span>
             </a>
         </div>
         <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "TradeListings" ? "active" : "")" href="#" @onclick='() => SetView("TradeListings")'>
+            <a class="nav-link @(NavState.CurrentView == "TradeListings" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("TradeListings")'>
                 <span class="nav-icon">📋</span> <span>@Loc["nav.trade_listings"]</span>
             </a>
         </div>
-        <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "Bank" ? "active" : "")" href="#" @onclick='() => SetView("Bank")'>
-                <span class="nav-icon">🏦</span> <span>@Loc["nav.bank"]</span>
-            </a>
+
+        <!-- 2. BUSINESS & INDUSTRY -->
+        <div class="nav-category-header text-uppercase small px-2 mt-3 mb-1">
+            <span>🏭 @Loc["nav.category.business"]</span>
         </div>
         <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "Housing" ? "active" : "")" href="#" @onclick='() => SetView("Housing")'>
-                <span class="nav-icon">🏠</span> <span>@Loc["nav.housing"]</span>
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "Logistics" ? "active" : "")" href="#" @onclick='() => SetView("Logistics")'>
-                <span class="nav-icon">🚚</span> <span>@Loc["nav.logistics"]</span>
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "Production" ? "active" : "")" href="#" @onclick='() => SetView("Production")'>
+            <a class="nav-link @(NavState.CurrentView == "Production" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("Production")'>
                 <span class="nav-icon">🏭</span> <span>@Loc["nav.production"]</span>
             </a>
         </div>
         <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "Inventory" ? "active" : "")" href="#" @onclick='() => SetView("Inventory")'>
-                <span class="nav-icon">🎒</span> <span>@Loc["nav.inventory"]</span>
+            <a class="nav-link @(NavState.CurrentView == "Logistics" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("Logistics")'>
+                <span class="nav-icon">🚚</span> <span>@Loc["nav.logistics"]</span>
             </a>
         </div>
         <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "Bar" ? "active" : "")" href="#" @onclick='() => SetView("Bar")'>
+            <a class="nav-link @(NavState.CurrentView == "Housing" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("Housing")'>
+                <span class="nav-icon">🏠</span> <span>@Loc["nav.housing"]</span>
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link @(NavState.CurrentView == "Inventory" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("Inventory")'>
+                <span class="nav-icon">🎒</span> <span>@Loc["nav.inventory"]</span>
+            </a>
+        </div>
+
+        <!-- 3. FINANCE -->
+        <div class="nav-category-header text-uppercase small px-2 mt-3 mb-1">
+            <span>🏦 @Loc["nav.category.finance"]</span>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link @(NavState.CurrentView == "Bank" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("Bank")'>
+                <span class="nav-icon">🏦</span> <span>@Loc["nav.bank"]</span>
+            </a>
+        </div>
+
+        <!-- 4. ENTERTAINMENT -->
+        <div class="nav-category-header text-uppercase small px-2 mt-3 mb-1">
+            <span>🎲 @Loc["nav.category.entertainment"]</span>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link @(NavState.CurrentView == "Bar" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("Bar")'>
                 <span class="nav-icon">🍺</span> <span>@Loc["nav.bar"]</span>
             </a>
         </div>
         <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "Poker" ? "active" : "")" href="#" @onclick='() => SetView("Poker")'>
-                <span class="nav-icon">♠️</span> <span>@Loc["nav.poker"]</span>
+            <a class="nav-link @(NavState.CurrentView == "Poker" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("Poker")'>
+                <span class="nav-icon">🃏</span> <span>@Loc["nav.poker"]</span>
             </a>
         </div>
-        <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "Events" ? "active" : "")" href="#" @onclick='() => SetView("Events")'>
-                <span class="nav-icon">📜</span> <span>@Loc["nav.events"]</span>
-            </a>
+
+        <!-- 5. WORLD & SYSTEM -->
+        <div class="nav-category-header text-uppercase small px-2 mt-3 mb-1">
+            <span>🌐 @Loc["nav.category.world"]</span>
         </div>
         <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "Scenarios" ? "active" : "")" href="#" @onclick='() => SetView("Scenarios")'>
-                <span class="nav-icon">🏁</span> <span>@Loc["nav.scenarios"]</span>
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "Save" ? "active" : "")" href="#" @onclick='() => SetView("Save")'>
-                <span class="nav-icon">💾</span> <span>@Loc["nav.save"]</span>
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "AIPlayers" ? "active" : "")" href="#" @onclick='() => SetView("AIPlayers")'>
+            <a class="nav-link @(NavState.CurrentView == "AIPlayers" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("AIPlayers")'>
                 <span class="nav-icon">🤖</span> <span>@Loc["nav.ai_traders"]</span>
             </a>
         </div>
         <div class="nav-item">
-            <a class="nav-link @(NavState.CurrentView == "Profile" ? "active" : "")" href="#" @onclick='() => SetView("Profile")'>
+            <a class="nav-link @(NavState.CurrentView == "Scenarios" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("Scenarios")'>
+                <span class="nav-icon">🏁</span> <span>@Loc["nav.scenarios"]</span>
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link @(NavState.CurrentView == "Events" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("Events")'>
+                <span class="nav-icon">📜</span> <span>@Loc["nav.events"]</span>
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link @(NavState.CurrentView == "Profile" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("Profile")'>
                 <span class="nav-icon">👤</span> <span>@Loc["nav.profile"]</span>
             </a>
         </div>
-    </nav>
+        <div class="nav-item">
+            <a class="nav-link @(NavState.CurrentView == "Save" ? "active" : "")" href="#" @onclick:preventDefault @onclick='() => SetView("Save")'>
+                <span class="nav-icon">💾</span> <span>@Loc["nav.save"]</span>
+            </a>
+        </div>
+    </div>
 </div>
 
-@code {
-    private bool collapseNavMenu = true;
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+<!-- ================= MOBILE FIXED BOTTOM DOCK ================= -->
+<div class="mobile-bottom-dock d-flex d-md-none">
+    <!-- Market Hub -->
+    <button type="button" class="dock-btn @(IsMarketActive ? "active" : "")" @onclick='() => SetView("Market")'>
+        <span class="dock-icon">📈</span>
+        <span class="dock-label">@Loc["nav.hub.market"]</span>
+    </button>
 
-    private void ToggleNavMenu()
+    <!-- Business Hub -->
+    <button type="button" class="dock-btn @(IsBusinessActive ? "active" : "")" @onclick='() => SetView("Production")'>
+        <span class="dock-icon">🏭</span>
+        <span class="dock-label">@Loc["nav.hub.business"]</span>
+    </button>
+
+    <!-- Bank Hub -->
+    <button type="button" class="dock-btn @(IsFinanceActive ? "active" : "")" @onclick='() => SetView("Bank")'>
+        <span class="dock-icon">🏦</span>
+        <span class="dock-label">@Loc["nav.hub.finance"]</span>
+    </button>
+
+    <!-- Leisure Hub -->
+    <button type="button" class="dock-btn @(IsLeisureActive ? "active" : "")" @onclick='() => SetView("Bar")'>
+        <span class="dock-icon">🎲</span>
+        <span class="dock-label">@Loc["nav.hub.leisure"]</span>
+    </button>
+
+    <!-- Menu / More Hub -->
+    <button type="button" class="dock-btn @(_isMobileMenuOpen || IsMoreActive ? "active" : "")" @onclick="ToggleMobileMenu">
+        <span class="dock-icon">☰</span>
+        <span class="dock-label">@Loc["nav.hub.more"]</span>
+    </button>
+</div>
+
+<!-- ================= MOBILE BOTTOM SHEET DRAWER ================= -->
+@if (_isMobileMenuOpen)
+{
+    <div class="drawer-backdrop d-md-none" @onclick="CloseMobileMenu"></div>
+    <div class="drawer-sheet d-md-none animate-slide-up">
+        <div class="drawer-header d-flex align-items-center justify-content-between p-3 border-bottom border-secondary border-opacity-25">
+            <div class="d-flex align-items-center gap-2">
+                <span class="fs-5">🧭</span>
+                <h5 class="m-0 fw-bold text-white">@Loc["nav.hub.more"]</h5>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary text-white rounded-circle drawer-close-btn" @onclick="CloseMobileMenu">✕</button>
+        </div>
+
+        <div class="drawer-body p-3">
+            <!-- Trade Sub-items -->
+            <div class="drawer-section mb-3">
+                <div class="drawer-section-title small text-uppercase text-white-50 mb-2">📈 @Loc["nav.category.trade"]</div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "Market" ? "active" : "")" @onclick='() => SetView("Market")'>
+                            <span>📊</span> <span>@Loc["nav.market"]</span>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "StockExchange" ? "active" : "")" @onclick='() => SetView("StockExchange")'>
+                            <span>🏢</span> <span>@Loc["nav.stock_exchange"]</span>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "StockMarket" ? "active" : "")" @onclick='() => SetView("StockMarket")'>
+                            <span>📈</span> <span>@Loc["nav.stock_market"]</span>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "TradeListings" ? "active" : "")" @onclick='() => SetView("TradeListings")'>
+                            <span>📋</span> <span>@Loc["nav.trade_listings"]</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Business Sub-items -->
+            <div class="drawer-section mb-3">
+                <div class="drawer-section-title small text-uppercase text-white-50 mb-2">🏭 @Loc["nav.category.business"]</div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "Production" ? "active" : "")" @onclick='() => SetView("Production")'>
+                            <span>🏭</span> <span>@Loc["nav.production"]</span>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "Logistics" ? "active" : "")" @onclick='() => SetView("Logistics")'>
+                            <span>🚚</span> <span>@Loc["nav.logistics"]</span>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "Housing" ? "active" : "")" @onclick='() => SetView("Housing")'>
+                            <span>🏠</span> <span>@Loc["nav.housing"]</span>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "Inventory" ? "active" : "")" @onclick='() => SetView("Inventory")'>
+                            <span>🎒</span> <span>@Loc["nav.inventory"]</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Leisure Sub-items -->
+            <div class="drawer-section mb-3">
+                <div class="drawer-section-title small text-uppercase text-white-50 mb-2">🎲 @Loc["nav.category.entertainment"]</div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "Bar" ? "active" : "")" @onclick='() => SetView("Bar")'>
+                            <span>🍺</span> <span>@Loc["nav.bar"]</span>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "Poker" ? "active" : "")" @onclick='() => SetView("Poker")'>
+                            <span>🃏</span> <span>@Loc["nav.poker"]</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- World & System Sub-items -->
+            <div class="drawer-section mb-2">
+                <div class="drawer-section-title small text-uppercase text-white-50 mb-2">🌐 @Loc["nav.category.world"]</div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "AIPlayers" ? "active" : "")" @onclick='() => SetView("AIPlayers")'>
+                            <span>🤖</span> <span>@Loc["nav.ai_traders"]</span>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "Scenarios" ? "active" : "")" @onclick='() => SetView("Scenarios")'>
+                            <span>🏁</span> <span>@Loc["nav.scenarios"]</span>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "Events" ? "active" : "")" @onclick='() => SetView("Events")'>
+                            <span>📜</span> <span>@Loc["nav.events"]</span>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "Profile" ? "active" : "")" @onclick='() => SetView("Profile")'>
+                            <span>👤</span> <span>@Loc["nav.profile"]</span>
+                        </button>
+                    </div>
+                    <div class="col-12">
+                        <button class="drawer-item-btn w-100 @(NavState.CurrentView == "Save" ? "active" : "")" @onclick='() => SetView("Save")'>
+                            <span>💾</span> <span>@Loc["nav.save"]</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _isMobileMenuOpen = false;
+
+    private bool IsMarketActive => NavState.CurrentView == "Market" || NavState.CurrentView == "StockExchange";
+    private bool IsBusinessActive => NavState.CurrentView == "Production" || NavState.CurrentView == "Logistics" || NavState.CurrentView == "Housing" || NavState.CurrentView == "Inventory";
+    private bool IsFinanceActive => NavState.CurrentView == "Bank" || NavState.CurrentView == "StockMarket" || NavState.CurrentView == "TradeListings";
+    private bool IsLeisureActive => NavState.CurrentView == "Bar" || NavState.CurrentView == "Poker";
+    private bool IsMoreActive => NavState.CurrentView == "AIPlayers" || NavState.CurrentView == "Scenarios" || NavState.CurrentView == "Events" || NavState.CurrentView == "Profile" || NavState.CurrentView == "Save";
+
+    private void ToggleMobileMenu()
     {
-        collapseNavMenu = !collapseNavMenu;
+        _isMobileMenuOpen = !_isMobileMenuOpen;
+    }
+
+    private void CloseMobileMenu()
+    {
+        _isMobileMenuOpen = false;
     }
 
     protected override void OnInitialized()
@@ -121,7 +310,7 @@
     private void SetView(string view)
     {
         NavState.CurrentView = view;
-        collapseNavMenu = true;
+        _isMobileMenuOpen = false;
     }
 
     public void Dispose()

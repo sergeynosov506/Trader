@@ -19,9 +19,8 @@ namespace EconomicGame.Services
 
         /// <summary>
         /// Injected by the game loop each tick. Used to gate trading to market hours.
-        /// Falls back to the wall clock if never set, keeping existing tests green.
         /// </summary>
-        public DateTime? CurrentGameTime { get; set; }
+        public DateTime CurrentGameTime { get; set; } = DateTime.Today.AddHours(9);
 
         public StockMarketService(PlayerService playerService)
         {
@@ -30,13 +29,11 @@ namespace EconomicGame.Services
         }
 
         /// <summary>
-        /// Is the exchange currently open for trading? Honors configured open/close hours
-        /// and keeps the market closed on Saturday &amp; Sunday game-time.
+        /// Is the exchange currently open for trading? Honors configured open/close hours (9:00–18:00).
         /// </summary>
         public bool IsMarketOpen(DateTime? gameTime = null)
         {
-            var t = gameTime ?? CurrentGameTime ?? DateTime.Now;
-            if (t.DayOfWeek == DayOfWeek.Saturday || t.DayOfWeek == DayOfWeek.Sunday) return false;
+            var t = gameTime ?? CurrentGameTime;
             return t.Hour >= GameConstants.StockMarketOpenHour
                 && t.Hour < GameConstants.StockMarketCloseHour;
         }
@@ -99,7 +96,7 @@ namespace EconomicGame.Services
         public string BuyStock(Player player, string ticker, int quantity)
         {
             if (player == null) return "Игрок не найден!";
-            if (!IsMarketOpen()) return $"Биржа закрыта (работает {GameConstants.StockMarketOpenHour}:00–{GameConstants.StockMarketCloseHour}:00, пн-пт). Разместите лимитный ордер.";
+            if (!IsMarketOpen()) return $"Биржа закрыта (работает {GameConstants.StockMarketOpenHour}:00–{GameConstants.StockMarketCloseHour}:00). Разместите лимитный ордер.";
 
             var stock = Stocks.FirstOrDefault(s => s.Ticker == ticker);
             if (stock == null) return "Акция не найдена!";
@@ -146,7 +143,7 @@ namespace EconomicGame.Services
         public string SellStock(Player player, string ticker, int quantity)
         {
             if (player == null) return "Игрок не найден!";
-            if (!IsMarketOpen()) return $"Биржа закрыта (работает {GameConstants.StockMarketOpenHour}:00–{GameConstants.StockMarketCloseHour}:00, пн-пт). Разместите лимитный ордер.";
+            if (!IsMarketOpen()) return $"Биржа закрыта (работает {GameConstants.StockMarketOpenHour}:00–{GameConstants.StockMarketCloseHour}:00). Разместите лимитный ордер.";
 
             var stock = Stocks.FirstOrDefault(s => s.Ticker == ticker);
             if (stock == null) return "Акция не найдена!";
