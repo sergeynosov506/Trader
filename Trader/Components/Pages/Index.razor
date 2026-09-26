@@ -222,7 +222,7 @@
             }
 
             _player = PlayerService.GetOrCreatePlayer(_playerName);
-            GameEngine.SetCurrentTime(DateTime.Today.AddHours(8));
+            GameEngine.StartNewClock();
             StateHasChanged();
         }
     }

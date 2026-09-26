@@ -40,6 +40,7 @@ namespace EconomicGame.Configuration
         // Trading Settings
         // (Car price moved to Vehicle Settings as BasicCarPrice to avoid duplication)
         public const decimal SellerFeeRate = 0.10m;           // 10% market commission
+        public const decimal ExchangeSellFeeRate = 0.05m;     // 5% commission when selling on the exchange (creates a buy/sell spread)
         public const decimal CancellationPenaltyRate = 0.05m; // 5% fee for cancelling listing
         public const int MaxActivityLogEntries = 50;
         public const int MaxNewsEntries = 10;

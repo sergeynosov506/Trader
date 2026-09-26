@@ -96,6 +96,7 @@ namespace EconomicGame.Services
         public string BuyStock(Player player, string ticker, int quantity)
         {
             if (player == null) return "Игрок не найден!";
+            if (quantity <= 0) return "Количество акций должно быть больше нуля!";
             if (!IsMarketOpen()) return $"Биржа закрыта (работает {GameConstants.StockMarketOpenHour}:00–{GameConstants.StockMarketCloseHour}:00). Разместите лимитный ордер.";
 
             var stock = Stocks.FirstOrDefault(s => s.Ticker == ticker);
@@ -143,6 +144,7 @@ namespace EconomicGame.Services
         public string SellStock(Player player, string ticker, int quantity)
         {
             if (player == null) return "Игрок не найден!";
+            if (quantity <= 0) return "Количество акций должно быть больше нуля!";
             if (!IsMarketOpen()) return $"Биржа закрыта (работает {GameConstants.StockMarketOpenHour}:00–{GameConstants.StockMarketCloseHour}:00). Разместите лимитный ордер.";
 
             var stock = Stocks.FirstOrDefault(s => s.Ticker == ticker);
@@ -183,6 +185,8 @@ namespace EconomicGame.Services
         public string PlaceOrder(Player player, string ticker, OrderType orderType, decimal targetPrice, int quantity, bool isBuy)
         {
             if (player == null) return "Игрок не найден!";
+            if (quantity <= 0) return "Количество акций должно быть больше нуля!";
+            if (targetPrice <= 0) return "Цена ордера должна быть больше нуля!";
 
             var stock = Stocks.FirstOrDefault(s => s.Ticker == ticker);
             if (stock == null) return "Акция не найдена!";

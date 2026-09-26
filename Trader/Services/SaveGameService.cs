@@ -21,7 +21,57 @@ namespace EconomicGame.Services
             _gameEngine = gameEngine;
             _storage = storage;
             _stockMarketService = stockMarketService;
+
+            // Autosave once per game day (≈ every 8 real minutes) into a fixed per-game slot.
+            // Especially important in the browser (WASM): closing the tab otherwise loses everything.
+            _gameEngine.OnStateChanged += TryAutosave;
         }
+
+        #region Autosave / quick save slots
+
+        private readonly object _autosaveLock = new();
+        private int _lastAutosaveDay = -1;
+
+        /// <summary>Fixed slot key for this game's autosave (one per game, overwritten each day).</summary>
+        public string AutosaveKey(Player player) => $"{SanitizeFileName(player.Name)}_autosave_{player.Id.ToString("N")[..8]}";
+
+        /// <summary>Fixed slot key for this game's quick save (overwritten on every quick save).</summary>
+        public string QuickSaveKey(Player player) => $"{SanitizeFileName(player.Name)}_quicksave_{player.Id.ToString("N")[..8]}";
+
+        /// <summary>Quick save into this game's single quick-save slot.</summary>
+        public string QuickSave()
+        {
+            var player = _playerService.GetCurrentPlayer();
+            if (player == null) return "❌ Нет активного игрока для сохранения!";
+            return SaveGameToSlot($"{player.Name} — быстрое сохранение", QuickSaveKey(player));
+        }
+
+        private void TryAutosave()
+        {
+            var player = _playerService.GetCurrentPlayer();
+            if (player == null) return;
+
+            // Never block the game tick / UI waiting for a save already in progress
+            if (!System.Threading.Monitor.TryEnter(_autosaveLock)) return;
+            try
+            {
+                var day = _gameEngine.GameDay;
+                if (_lastAutosaveDay < 0) { _lastAutosaveDay = day; return; } // baseline after start/load
+                if (day == _lastAutosaveDay) return;
+                if (_gameEngine.PokerHandInProgress) return; // retry on a later tick
+
+                _lastAutosaveDay = day;
+                var result = SaveGameToSlot($"{player.Name} — автосохранение (день {day})", AutosaveKey(player));
+                if (!result.StartsWith("✅"))
+                    _gameEngine.LogActivity($"⚠️ Автосохранение не удалось: {result}");
+            }
+            finally
+            {
+                System.Threading.Monitor.Exit(_autosaveLock);
+            }
+        }
+
+        #endregion
 
         public List<(string FileName, GameSaveData Data)> GetSaveFiles()
         {
@@ -43,7 +93,17 @@ namespace EconomicGame.Services
             return saves.OrderByDescending(s => s.Item2.SavedAt).ToList();
         }
 
+        /// <summary>
+        /// Saves into a NEW slot named "{saveName}_{timestamp}".
+        /// </summary>
         public string SaveGame(string saveName)
+            => SaveGameToSlot(saveName, $"{SanitizeFileName(saveName)}_{DateTime.Now:yyyyMMdd_HHmmss}");
+
+        /// <summary>
+        /// Saves into a FIXED slot (overwritten each time) — used by quick save and autosave,
+        /// so repeated saves don't pile up and exhaust browser localStorage (~5 MB).
+        /// </summary>
+        public string SaveGameToSlot(string saveName, string slotKey)
         {
             try
             {
@@ -60,7 +120,8 @@ namespace EconomicGame.Services
                     SaveName = saveName,
                     SavedAt = DateTime.Now,
                     GameTime = _gameEngine.CurrentTime,
-                    GameDay = (_gameEngine.CurrentTime - DateTime.Today).Days + 1,
+                    GameDay = _gameEngine.GameDay,
+                    GameStartTime = _gameEngine.GameStartTime,
                     PlayerData = ConvertPlayerToSave(player),
                     
                     // Save all AI nodes
@@ -96,13 +157,10 @@ namespace EconomicGame.Services
                     BarBankroll = _gameEngine.BarBankroll
                 };
 
-                var json = JsonSerializer.Serialize(saveData, new JsonSerializerOptions 
-                { 
-                    WriteIndented = true 
-                });
+                // Compact JSON: a save holds 100 AI players, indentation roughly doubles its size
+                var json = JsonSerializer.Serialize(saveData);
 
-                var fileName = $"{SanitizeFileName(saveName)}_{DateTime.Now:yyyyMMdd_HHmmss}";
-                _storage.Write(fileName, json);
+                _storage.Write(slotKey, json);
 
                 return $"✅ Игра сохранена: {saveName}";
             }
@@ -124,6 +182,12 @@ namespace EconomicGame.Services
 
                 if (saveData?.PlayerData == null)
                     return "❌ Повреждённый файл сохранения!";
+
+                // Restore game clock FIRST — restored timestamps (rent, maintenance) fall back to it.
+                // Old saves have no GameStartTime: derive it from the stored day number.
+                var startTime = saveData.GameStartTime
+                    ?? saveData.GameTime.Date.AddDays(-(Math.Max(saveData.GameDay, 1) - 1)).AddHours(8);
+                _gameEngine.RestoreClock(saveData.GameTime, startTime);
 
                 // Clear existing state
                 _playerService.ClearAllPlayers();
@@ -152,8 +216,8 @@ namespace EconomicGame.Services
                     }
                 }
 
-                // Restore game time
-                _gameEngine.SetCurrentTime(saveData.GameTime);
+                // Don't autosave the freshly loaded state straight away
+                _lastAutosaveDay = _gameEngine.GameDay;
 
                 // Restore bar cash desk
                 _gameEngine.BarBankroll = saveData.BarBankroll;
@@ -264,7 +328,8 @@ namespace EconomicGame.Services
                     PurchasePrice = p.PurchasePrice,
                     MonthlyRent = p.MonthlyRent,
                     GuestCapacity = p.GuestCapacity,
-                    BirthdayGiftBonus = p.BirthdayGiftBonus
+                    BirthdayGiftBonus = p.BirthdayGiftBonus,
+                    LastRentPaid = p.LastRentPaid
                 }).ToList(),
 
                 Lands = player.Lands.Select(l => new LandSave
@@ -292,7 +357,8 @@ namespace EconomicGame.Services
                     Name = w.Name,
                     Capacity = w.Capacity,
                     PurchasePrice = w.PurchasePrice,
-                    MonthlyMaintenance = w.MonthlyMaintenance
+                    MonthlyMaintenance = w.MonthlyMaintenance,
+                    LastMaintenancePaid = w.LastMaintenancePaid
                 }).ToList(),
 
                 TradingLicenseLevel = player.TradingLicenseLevel,
@@ -333,7 +399,8 @@ namespace EconomicGame.Services
                     EfficiencyMultiplier = f.EfficiencyMultiplier,
                     ProductionLevel = f.ProductionLevel,
                     CurrentCycleStart = f.CurrentCycleStart,
-                    IsDiseased = f.IsDiseased
+                    IsDiseased = f.IsDiseased,
+                    LastMaintenancePaid = f.LastMaintenancePaid
                 }).ToList(),
 
                 AutoProductionRecipes = player.AutoProductionRecipes.ToList(),
@@ -415,8 +482,8 @@ namespace EconomicGame.Services
                     MonthlyRent = p.MonthlyRent,
                     GuestCapacity = p.GuestCapacity,
                     BirthdayGiftBonus = p.BirthdayGiftBonus,
-                    PurchaseDate = DateTime.Now,
-                    LastRentPaid = DateTime.Now
+                    PurchaseDate = _gameEngine.CurrentTime,
+                    LastRentPaid = p.LastRentPaid ?? _gameEngine.CurrentTime
                 }).ToList();
             }
             else if (save.Property != null)
@@ -429,8 +496,8 @@ namespace EconomicGame.Services
                     MonthlyRent = save.Property.MonthlyRent,
                     GuestCapacity = save.Property.GuestCapacity,
                     BirthdayGiftBonus = save.Property.BirthdayGiftBonus,
-                    PurchaseDate = DateTime.Now,
-                    LastRentPaid = DateTime.Now
+                    PurchaseDate = _gameEngine.CurrentTime,
+                    LastRentPaid = save.Property.LastRentPaid ?? _gameEngine.CurrentTime
                 };
                 player.Properties.Add(property);
             }
@@ -470,8 +537,8 @@ namespace EconomicGame.Services
                     PurchasePrice = ws.PurchasePrice,
                     MonthlyMaintenance = ws.MonthlyMaintenance,
                     Capacity = info != default ? info.Capacity : ws.Capacity,
-                    PurchaseDate = DateTime.Now,
-                    LastMaintenancePaid = DateTime.Now
+                    PurchaseDate = _gameEngine.CurrentTime,
+                    LastMaintenancePaid = ws.LastMaintenancePaid ?? _gameEngine.CurrentTime
                 };
             }).ToList();
 
@@ -516,8 +583,8 @@ namespace EconomicGame.Services
                 ProductionLevel = f.ProductionLevel,
                 CurrentCycleStart = f.CurrentCycleStart,
                 IsDiseased = f.IsDiseased,
-                PurchaseDate = DateTime.Now,
-                LastMaintenancePaid = DateTime.Now
+                PurchaseDate = _gameEngine.CurrentTime,
+                LastMaintenancePaid = f.LastMaintenancePaid ?? _gameEngine.CurrentTime
             }).ToList();
 
             player.AutoProductionRecipes = save.AutoProductionRecipes ?? new List<Guid>();

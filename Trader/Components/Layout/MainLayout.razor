@@ -24,7 +24,7 @@
                     <div class="stat-badge d-flex align-items-center gap-1">
                         <span class="fs-6">🕒</span>
                         <span class="fw-bold text-primary">@GameEngine.CurrentTime.ToString("t")</span>
-                        <span class="text-muted small">(@Loc["home.day"] @((GameEngine.CurrentTime - DateTime.Today).Days + 1))</span>
+                        <span class="text-muted small">(@Loc["home.day"] @GameEngine.GameDay)</span>
                     </div>
 
                     <!-- Cash / Wallet Badge -->
@@ -132,9 +132,10 @@
         if (Player == null) return;
         try
         {
-            var saveName = $"{Player.Name}_Autosave_{DateTime.Now:yyyyMMdd_HHmmss}";
-            SaveService.SaveGame(saveName);
-            _saveToastMessage = Loc["nav.saved_success"];
+            // Single quick-save slot per game (overwritten) — timestamped saves used to pile up
+            // and silently overflow browser localStorage.
+            var result = SaveService.QuickSave();
+            _saveToastMessage = result.StartsWith("✅") ? Loc["nav.saved_success"] : result;
             StateHasChanged();
             await Task.Delay(2200);
             _saveToastMessage = null;

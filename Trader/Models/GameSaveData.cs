@@ -13,6 +13,9 @@ namespace EconomicGame.Models
         public DateTime SavedAt { get; set; } = DateTime.Now;
         public DateTime GameTime { get; set; }
         public int GameDay { get; set; }
+
+        // Moment the game started (day 1, 08:00). Null in old saves — derived from GameTime/GameDay on load.
+        public DateTime? GameStartTime { get; set; }
         
         // Player data
         public PlayerSaveData? PlayerData { get; set; }
@@ -128,6 +131,7 @@ namespace EconomicGame.Models
         public decimal MonthlyRent { get; set; }
         public int GuestCapacity { get; set; }
         public decimal BirthdayGiftBonus { get; set; }
+        public DateTime? LastRentPaid { get; set; }   // game time; null in old saves
     }
 
     public class LandSave
@@ -147,6 +151,7 @@ namespace EconomicGame.Models
         public int Capacity { get; set; }
         public decimal PurchasePrice { get; set; }
         public decimal MonthlyMaintenance { get; set; }
+        public DateTime? LastMaintenancePaid { get; set; }   // game time; null in old saves
     }
 
     public class LoanSave
@@ -171,6 +176,8 @@ namespace EconomicGame.Models
         // Agriculture harvest cycle state
         public DateTime? CurrentCycleStart { get; set; }
         public bool IsDiseased { get; set; }
+
+        public DateTime? LastMaintenancePaid { get; set; }   // game time; null in old saves
     }
 
     public class StockPortfolioSave

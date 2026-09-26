@@ -39,7 +39,7 @@
                                 <h6>@Loc["save.progress"]</h6>
                                 <p><strong>@Loc["save.player"]:</strong> @Player.Name</p>
                                 <p><strong>@Loc["save.money"]:</strong> @Player.Money.ToString("C")</p>
-                                <p><strong>@Loc["save.day"]:</strong> @(((GameEngine.CurrentTime - DateTime.Today).Days) + 1)</p>
+                                <p><strong>@Loc["save.day"]:</strong> @GameEngine.GameDay</p>
                                 <p><strong>@Loc["save.time"]:</strong> @GameEngine.CurrentTime.ToString("t")</p>
                             </div>
                         </div>

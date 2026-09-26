@@ -11,6 +11,9 @@ namespace EconomicGame.Extensions
         public static void AddOrUpdateItem(this List<InventoryItem> inventory, 
             string itemName, decimal price, int quantity)
         {
+            // Guard: negative/zero quantities must never reach inventory (dupe exploit)
+            if (quantity <= 0) return;
+
             var existing = inventory.FirstOrDefault(i => i.ItemName == itemName);
             if (existing != null)
             {
@@ -38,6 +41,9 @@ namespace EconomicGame.Extensions
         public static bool RemoveQuantity(this List<InventoryItem> inventory, 
             string itemName, int quantity)
         {
+            // Guard: removing a negative amount would ADD items
+            if (quantity <= 0) return false;
+
             var existing = inventory.FirstOrDefault(i => i.ItemName == itemName);
             if (existing == null || existing.Quantity < quantity)
                 return false;

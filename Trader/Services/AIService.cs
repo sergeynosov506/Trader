@@ -380,7 +380,7 @@ namespace EconomicGame.Services
 
                 if (existingItem != null && existingItem.Quantity > 0)
                 {
-                    bool isProfitable = item.CurrentPrice > existingItem.AveragePrice * strat.ProfitThreshold;
+                    bool isProfitable = item.CurrentPrice * (1 - GameConstants.ExchangeSellFeeRate) > existingItem.AveragePrice * strat.ProfitThreshold;
                     bool isOvervalued = item.CurrentPrice > sma * strat.OvervaluedThreshold;
                     
                     // Phase 6: Corporate Rivalry Sell logic (Predatory Pricing)

@@ -91,6 +91,30 @@ namespace EconomicGame.Services
 
         public DateTime CurrentTime { get; private set; } = DateTime.Today.AddHours(8); // Start at 8 AM
 
+        /// <summary>
+        /// Moment the current game started (day 1, 08:00). Every "day N" / "days since start"
+        /// calculation is relative to this — NOT to the real-world DateTime.Today, otherwise the
+        /// day counter breaks after real midnight or when a save is loaded on another day.
+        /// </summary>
+        public DateTime GameStartTime { get; private set; } = DateTime.Today.AddHours(8);
+
+        /// <summary>1-based game day number (day 1 = the day the game started).</summary>
+        public int GameDay => (CurrentTime.Date - GameStartTime.Date).Days + 1;
+
+        /// <summary>Starts a fresh game clock: day 1, 08:00.</summary>
+        public void StartNewClock()
+        {
+            GameStartTime = DateTime.Today.AddHours(8);
+            CurrentTime = GameStartTime;
+        }
+
+        /// <summary>Restores the clock from a save.</summary>
+        public void RestoreClock(DateTime currentTime, DateTime gameStartTime)
+        {
+            GameStartTime = gameStartTime;
+            CurrentTime = currentTime;
+        }
+
         public void SetCurrentTime(DateTime time)
         {
             CurrentTime = time;
@@ -179,7 +203,7 @@ namespace EconomicGame.Services
             _insuranceService.UpdateInsuranceStatus(CurrentTime);
 
             // Per-player updates — run once per player
-            var currentDay = (int)(CurrentTime - DateTime.Today.AddHours(8)).TotalDays;
+            var currentDay = (int)(CurrentTime - GameStartTime).TotalDays;
             foreach (var player in _playerService.GetAllPlayers())
             {
                 _bank.CheckLoans(player, CurrentTime);
@@ -1186,6 +1210,9 @@ namespace EconomicGame.Services
         public string BuyItem(Player player, MarketItem item, int quantity)
         {
             if (player == null) return "No player found!";
+
+            if (quantity <= 0)
+                return "Количество должно быть больше нуля!";
             
             if (player.IsSabotaged)
                 return "Ваши операции заблокированы из-за саботажа! Дождитесь окончания действия эффекта.";
@@ -1227,6 +1254,9 @@ namespace EconomicGame.Services
         {
             if (player == null) return "No player found!";
 
+            if (quantity <= 0)
+                return "Количество должно быть больше нуля!";
+
             if (player.IsSabotaged)
                 return "Ваши операции заблокированы из-за саботажа! Продажа невозможна.";
 
@@ -1238,7 +1268,10 @@ namespace EconomicGame.Services
             if (quantity > inventoryItem.Quantity)
                 return $"You only have {inventoryItem.Quantity} {item.Name}! Cannot sell {quantity}.";
 
-            var totalRevenue = item.CurrentPrice * quantity;
+            // Exchange commission: without it buy→sell is a free round trip (no spread)
+            var grossRevenue = item.CurrentPrice * quantity;
+            var fee = Math.Round(grossRevenue * GameConstants.ExchangeSellFeeRate, 2);
+            var totalRevenue = grossRevenue - fee;
 
             // Execute sale
             player.Money += totalRevenue;
@@ -1254,7 +1287,9 @@ namespace EconomicGame.Services
             LogActivity($"{player.Name} sold {quantity} {item.Name} for {totalRevenue:C}");
 
             OnStateChanged?.Invoke();
-            return $"Successfully sold {quantity} {item.Name} for {totalRevenue:C}";
+            return fee > 0
+                ? $"Successfully sold {quantity} {item.Name} for {totalRevenue:C} (fee {fee:C})"
+                : $"Successfully sold {quantity} {item.Name} for {totalRevenue:C}";
         }
 
         #endregion
@@ -1266,6 +1301,12 @@ namespace EconomicGame.Services
         public string CreateListing(Player seller, string itemName, int quantity, decimal pricePerUnit, bool autoRepeat = false)
         {
             if (seller == null) return "Seller not found!";
+
+            if (quantity <= 0)
+                return "Количество должно быть больше нуля!";
+
+            if (pricePerUnit <= 0)
+                return "Цена должна быть больше нуля!";
             
             if (seller.IsSabotaged)
                 return "Контракты заблокированы из-за саботажа!";
