@@ -6,7 +6,13 @@ namespace EconomicGame.Configuration
         public const decimal InitialPlayerMoney = 10000m;
         
         // Loan Settings
-        public const decimal DefaultInterestRate = 0.05m; // 5% annual
+        // Rates are PER GAME MONTH (30 game days ≈ 4 real hours), not per year:
+        // with ~45 game days in a typical session an annual rate would be invisible.
+        public const decimal DefaultInterestRate = 0.05m;   // 5% per game month (base, drifts)
+        public const decimal MinBaseInterestRate = 0.03m;   // base rate drifts within 3%..12% per month
+        public const decimal MaxBaseInterestRate = 0.12m;
+        public const decimal InterestRateDriftPerTick = 0.0005m; // ±0.05 pp per tick (was ±1 pp — pure noise)
+        public const decimal MinLoanInterestRate = 0.02m;   // floor after reputation discount
         public const decimal DailyPenaltyRate = 0.01m; // 1% per day
         public const decimal MaxPenaltyThreshold = 0.5m; // 50% of loan amount
 
@@ -39,6 +45,8 @@ namespace EconomicGame.Configuration
         public const decimal ScarcityImpact = 0.015m;        // Up to 1.5% upward pressure from scarcity (was 5%)
         public const decimal InflationCoolingFactor = 0.98m; // Prices > $1000 shrink by 2% per tick
         public const decimal PriceHyperThreshold = 500m;   // Threshold for "Hyper-inflation" (was 1000)
+        public const decimal HyperThresholdBaseMultiplier = 3m; // ...but never below 3× the item's normal price
+        public const decimal RawCoolingBaseMultiplier = 2m;     // raw-material cooling starts at max($200, 2× normal price)
         
         // Game Tick Settings
         public const int GameTickIntervalSeconds = 5;
@@ -61,7 +69,7 @@ namespace EconomicGame.Configuration
         public const int InitialReputation = 50;              // 0-100 scale
         public const int ReputationGainPerTrade = 1;
         public const int ReputationLossPerCancellation = 5;
-        public const decimal MaxReputationDiscount = 0.10m;   // Up to 10% interest discount
+        public const decimal MaxReputationDiscount = 0.04m;   // Up to −4 pp/month at reputation 100
         
         // Bar Settings
         public const int BarOpenHour = 18;   // The bar opens in the evening (18:00)...
@@ -188,7 +196,9 @@ namespace EconomicGame.Configuration
         public const double OverloadLossPercent = 0.1;     // Lose 10% of excess cargo
         
         // Bank Deposit Settings
-        public const decimal DepositInterestMultiplier = 0.4m;  // Deposits earn 40% of loan rate
+        public const decimal DepositInterestMultiplier = 0.1m;  // Deposits earn 10% of the base rate (~0.3–1.2%/month):
+                                                                // always below any loan rate — no borrow→deposit carry,
+                                                                // and nobody lives off deposit interest
         public const int DepositInterestPaymentDays = 7;         // Interest paid every 7 days
         public const int MonthlyReportDays = 30;                 // Generate report every 30 days
         public const int MaxMonthlyReports = 12;                 // Keep last 12 reports
@@ -282,7 +292,13 @@ namespace EconomicGame.Configuration
         public const decimal MinDividendYield = 0.01m;            // 1% min yield
         public const decimal MaxDividendYield = 0.08m;            // 8% max yield
         public const decimal StockPriceCorrelation = 0.6m;        // 60% commodity correlation
-        public const decimal StockPriceNoise = 0.04m;             // ±4% random noise
+        public const decimal StockPriceNoise = 0.015m;            // ±1.5% random noise per tick (was ±4% — ~23%/day of pure noise)
+        public const decimal StockMeanReversion = 0.03m;          // per tick, pulls price toward fundamental value (half-life ≈ 6 game hours)
+        public const decimal StockVolumeImpact = 0.5m;            // net buying of 1% of all shares moves price +0.5%
+        public const decimal StockMaxVolumeImpact = 0.03m;        // volume can't move price more than ±3% per tick
+        public const decimal StockMaxMovePerTick = 0.08m;         // total cap per tick
+        public const decimal StockMinPriceToFundamental = 0.2m;   // hard band: price stays within 0.2×..5× fundamental
+        public const decimal StockMaxPriceToFundamental = 5m;
         public const int MaxStockPriceHistory = 60;
         public const int InitialSharesPerStock = 10000;
         

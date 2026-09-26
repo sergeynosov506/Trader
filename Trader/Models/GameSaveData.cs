@@ -161,6 +161,8 @@ namespace EconomicGame.Models
         public DateTime DueDate { get; set; }
         public decimal Penalty { get; set; }
         public bool IsDefaulted { get; set; }
+        public decimal AccruedInterest { get; set; }          // 0 in old saves
+        public DateTime? LastInterestAccrual { get; set; }    // null in old saves → accrual restarts on load
     }
 
     public class IndustrialFactorySave

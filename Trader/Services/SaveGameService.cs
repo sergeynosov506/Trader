@@ -386,7 +386,9 @@ namespace EconomicGame.Services
                     InterestRate = l.InterestRate,
                     DueDate = l.DueDate,
                     Penalty = l.Penalty,
-                    IsDefaulted = l.IsDefaulted
+                    IsDefaulted = l.IsDefaulted,
+                    AccruedInterest = l.AccruedInterest,
+                    LastInterestAccrual = l.LastInterestAccrual
                 }).ToList(),
 
                 Factories = player.Factories.Select(f => new IndustrialFactorySave
@@ -569,7 +571,9 @@ namespace EconomicGame.Services
                 InterestRate = l.InterestRate,
                 DueDate = l.DueDate,
                 Penalty = l.Penalty,
-                IsDefaulted = l.IsDefaulted
+                IsDefaulted = l.IsDefaulted,
+                AccruedInterest = l.AccruedInterest,
+                LastInterestAccrual = l.LastInterestAccrual
             }).ToList();
 
             player.Factories = save.Factories.Select(f => new IndustrialFactory

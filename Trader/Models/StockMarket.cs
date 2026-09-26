@@ -31,6 +31,12 @@ namespace EconomicGame.Models
         /// Current share price
         /// </summary>
         public decimal SharePrice { get; set; }
+
+        /// <summary>
+        /// Reference price at game start (from StockDefinitions). The fundamental value is
+        /// BasePrice × (commodity price / commodity normal price)^CorrelationFactor.
+        /// </summary>
+        public decimal BasePrice { get; set; }
         
         /// <summary>
         /// Annual dividend yield (as decimal, e.g. 0.03 = 3%)
@@ -80,7 +86,14 @@ namespace EconomicGame.Models
     /// </summary>
     public static class StockDefinitions
     {
-        public static List<Stock> CreateInitialStocks() => new List<Stock>
+        public static List<Stock> CreateInitialStocks()
+        {
+            var stocks = CreateStockList();
+            foreach (var s in stocks) s.BasePrice = s.SharePrice;
+            return stocks;
+        }
+
+        private static List<Stock> CreateStockList() => new List<Stock>
         {
             new Stock
             {

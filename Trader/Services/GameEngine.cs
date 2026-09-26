@@ -72,6 +72,7 @@ namespace EconomicGame.Services
             _market = new Market();
 
             var items = configuration.GetSection("MarketItems").Get<List<MarketItem>>() ?? new List<MarketItem>();
+            foreach (var it in items) it.BasePrice = it.CurrentPrice; // reference price from config
             _exchange = new StockExchange(items);
 
             _bank = new Bank();
@@ -282,8 +283,8 @@ namespace EconomicGame.Services
                 EndingBalance = player.Money + player.BankDeposit,
                 TotalIncome = player.MonthlyIncome,
                 TotalExpenses = player.MonthlyExpenses,
-                InterestEarned = player.BankDeposit > 0 ? player.BankDeposit * _bank.GetDepositInterestRate() / 12 : 0,
-                LoanPayments = player.Loans.Sum(l => l.Amount),
+                InterestEarned = player.BankDeposit > 0 ? player.BankDeposit * _bank.GetDepositInterestRate() : 0, // rate is per month
+                LoanPayments = player.Loans.Sum(l => l.TotalOwed),
             };
             
             player.MonthlyReports.Add(report);

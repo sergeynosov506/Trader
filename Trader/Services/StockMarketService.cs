@@ -49,28 +49,45 @@ namespace EconomicGame.Services
                 var commodity = commodityPrices.FirstOrDefault(c => c.Name == stock.LinkedCommodity);
                 if (commodity == null) continue;
 
-                // Price correlation with commodity
-                decimal commodityChangePercent = 0;
+                // Price model (log space):
+                //   correlated commodity move + noise + volume impact
+                //   + mean reversion toward the FUNDAMENTAL value.
+                // Without the anchor the price was a random walk that bot buying pushed up by
+                // up to +10% per tick — prices hit 10^20+ within ~25 game days and overflowed decimal,
+                // crashing every subsequent tick.
+                var fundamental = GetFundamentalPrice(stock, commodity);
+
+                double correlated = 0;
                 if (commodity.PriceHistory.Count >= 2)
                 {
                     var prev = commodity.PriceHistory[commodity.PriceHistory.Count - 2];
                     var curr = commodity.CurrentPrice;
-                    if (prev > 0) commodityChangePercent = (curr - prev) / prev;
+                    if (prev > 0 && curr > 0)
+                        correlated = Math.Log((double)(curr / prev)) * (double)stock.CorrelationFactor;
                 }
 
-                // Stock price = correlated commodity move + random noise + volume impact
-                decimal correlatedChange = commodityChangePercent * stock.CorrelationFactor;
-                decimal noise = (decimal)(_random.NextDouble() * (double)GameConstants.StockPriceNoise * 2 - (double)GameConstants.StockPriceNoise);
-                
-                // Volume impact
+                double noiseRange = (double)GameConstants.StockPriceNoise;
+                double noise = _random.NextDouble() * noiseRange * 2 - noiseRange;
+
                 decimal netVolume = stock.BuyVolume - stock.SellVolume;
-                decimal volumeImpact = netVolume / (stock.TotalShares * 0.01m); // 1% of total shares = 1% price move
+                double volumeImpact = stock.TotalShares > 0
+                    ? (double)(netVolume / stock.TotalShares * GameConstants.StockVolumeImpact)
+                    : 0;
+                double maxVol = (double)GameConstants.StockMaxVolumeImpact;
+                volumeImpact = Math.Clamp(volumeImpact, -maxVol, maxVol);
 
-                decimal totalChange = correlatedChange + noise + volumeImpact * 0.01m;
-                totalChange = Math.Clamp(totalChange, -0.10m, 0.10m); // Max 10% move per tick
+                double reversion = stock.SharePrice > 0
+                    ? (double)GameConstants.StockMeanReversion * Math.Log((double)(fundamental / stock.SharePrice))
+                    : 0;
 
-                stock.SharePrice *= (1 + totalChange);
-                stock.SharePrice = Math.Max(0.10m, stock.SharePrice); // Floor
+                double maxMove = (double)GameConstants.StockMaxMovePerTick;
+                double logChange = Math.Clamp(correlated + noise + volumeImpact + reversion, -maxMove, maxMove);
+
+                var newPrice = (decimal)((double)stock.SharePrice * Math.Exp(logChange));
+                newPrice = Math.Clamp(newPrice,
+                    fundamental * GameConstants.StockMinPriceToFundamental,
+                    fundamental * GameConstants.StockMaxPriceToFundamental);
+                stock.SharePrice = Math.Round(Math.Max(0.10m, newPrice), 2);
 
                 // Record history
                 stock.PriceHistory.Add(stock.SharePrice);
@@ -88,6 +105,19 @@ namespace EconomicGame.Services
                     stock.AvailableShares = Math.Min(stock.AvailableShares, stock.TotalShares);
                 }
             }
+        }
+
+        /// <summary>
+        /// Fair value of a stock: its starting price scaled by how far the linked commodity
+        /// is from its normal price (dampened by the correlation factor).
+        /// </summary>
+        public static decimal GetFundamentalPrice(Stock stock, MarketItem commodity)
+        {
+            var basePrice = stock.BasePrice > 0 ? stock.BasePrice : stock.SharePrice;
+            if (commodity.BasePrice <= 0 || commodity.CurrentPrice <= 0) return basePrice;
+            var ratio = (double)(commodity.CurrentPrice / commodity.BasePrice);
+            var factor = Math.Pow(ratio, (double)stock.CorrelationFactor);
+            return Math.Max(0.10m, basePrice * (decimal)factor);
         }
 
         /// <summary>

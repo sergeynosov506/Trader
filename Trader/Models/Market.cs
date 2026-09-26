@@ -8,6 +8,14 @@ namespace EconomicGame
         public Guid ItemId { get; set; } = Guid.NewGuid();
         public required string Name { get; set; }
         public decimal CurrentPrice { get; set; }
+
+        /// <summary>
+        /// Reference ("normal") price = the configured starting price. Not saved — it comes from
+        /// appsettings on every start. Used to anchor cooling thresholds and stock fundamentals.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public decimal BasePrice { get; set; }
+
         public List<decimal> PriceHistory { get; set; } = new List<decimal>();
         public int AvailableQuantity { get; set; }
 

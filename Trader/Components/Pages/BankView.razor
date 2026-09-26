@@ -43,7 +43,7 @@
                     <div class="card-body text-center">
                         <h5>@Loc["bank.on_deposit"]</h5>
                         <h3>@Player.BankDeposit.ToString("C")</h3>
-                        <small>@((GameEngine.Bank.GetDepositInterestRate() * 100).ToString("F1"))@Loc["bank.annual"]</small>
+                        <small>@((GameEngine.Bank.GetDepositInterestRate() * 100).ToString("F2"))@Loc["bank.annual"]</small>
                     </div>
                 </div>
             </div>
@@ -51,7 +51,7 @@
                 <div class="card @(Player.Loans.Any() ? "bg-danger" : "bg-success") text-white">
                     <div class="card-body text-center">
                         <h5>@Loc["bank.debt"]</h5>
-                        <h3>@Player.Loans.Sum(l => l.Amount + l.Penalty).ToString("C")</h3>
+                        <h3>@Player.TotalDebt.ToString("C")</h3>
                     </div>
                 </div>
             </div>
@@ -188,7 +188,9 @@
                             <thead class="table-dark">
                                 <tr>
                                     <th>@Loc["bank.col_amount"]</th>
+                                    <th>@Loc["bank.col_rate"]</th>
                                     <th>@Loc["bank.col_term"]</th>
+                                    <th>@Loc["bank.col_interest"]</th>
                                     <th>@Loc["bank.col_penalty"]</th>
                                     <th>@Loc["bank.col_status"]</th>
                                     <th>@Loc["bank.col_action"]</th>
@@ -200,7 +202,9 @@
                                     var daysLeft = (loan.DueDate - GameEngine.CurrentTime).Days;
                                     <tr class="@(loan.IsDefaulted ? "table-danger" : daysLeft < 7 ? "table-warning" : "")">
                                         <td>@loan.Amount.ToString("C")</td>
+                                        <td>@((loan.InterestRate * 100).ToString("F1"))@Loc["bank.per_month"]</td>
                                         <td>@(daysLeft > 0 ? $"{daysLeft} {Loc["bank.days_short"]}" : Loc["bank.overdue"])</td>
+                                        <td class="text-danger">@loan.AccruedInterest.ToString("C")</td>
                                         <td>@loan.Penalty.ToString("C")</td>
                                         <td>
                                             @if (loan.IsDefaulted)
@@ -218,7 +222,7 @@
                                         </td>
                                         <td>
                                             <button class="btn btn-sm btn-success" @onclick="() => RepayLoan(loan)" disabled="@IsBankClosed">
-                                                @Loc["bank.repay"] (@((loan.Amount + loan.Penalty).ToString("C")))
+                                                @Loc["bank.repay"] (@loan.TotalOwed.ToString("C"))
                                             </button>
                                         </td>
                                     </tr>
@@ -253,7 +257,7 @@
                     </div>
                     <div class="col-md-3">
                         <div class="h6 text-muted">@Loc["bank.net_worth"]</div>
-                        <div class="h4 text-primary">@((Player.Money + Player.BankDeposit - Player.Loans.Sum(l => l.Amount + l.Penalty)).ToString("C"))</div>
+                        <div class="h4 text-primary">@((Player.Money + Player.BankDeposit - Player.TotalDebt).ToString("C"))</div>
                     </div>
                 </div>
 
@@ -350,7 +354,7 @@
             return;
         }
         Player.MonthlyIncome += _loanAmount;
-        _message = string.Format(Loc["bank.loan_approved"], _loanAmount.ToString("C"), _loanMonths, bank.CurrentInterestRate.ToString("P1"));
+        _message = string.Format(Loc["bank.loan_approved"], _loanAmount.ToString("C"), _loanMonths, bank.GetInterestRateForPlayer(Player).ToString("P1"));
         StateHasChanged();
     }
 
@@ -358,7 +362,7 @@
     {
         if (Player == null || IsBankClosed) return;
 
-        var totalDebt = loan.Amount + loan.Penalty;
+        var totalDebt = loan.TotalOwed;
         if (Player.Money < totalDebt)
         {
             _message = string.Format(Loc["bank.insufficient_funds"], totalDebt.ToString("C"), Player.Money.ToString("C"));
@@ -368,7 +372,7 @@
         Player.Money -= totalDebt;
         Player.MonthlyExpenses += totalDebt;
         Player.Loans.Remove(loan);
-        _message = string.Format(Loc["bank.loan_repaid"], loan.Amount.ToString("C"), loan.Penalty.ToString("C"));
+        _message = string.Format(Loc["bank.loan_repaid"], loan.Amount.ToString("C"), loan.AccruedInterest.ToString("C"), loan.Penalty.ToString("C"));
         StateHasChanged();
     }
 

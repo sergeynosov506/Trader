@@ -41,7 +41,7 @@ namespace EconomicGame.Services
             var baseNetWorth = marketItems != null
                 ? player.ComputeMarketNetWorth(marketItems)
                 : player.NetWorth;
-            var debt = player.Loans.Sum(l => l.Amount + l.Penalty);
+            var debt = player.Loans.Sum(l => l.TotalOwed);
             return baseNetWorth - debt;
         }
 
@@ -195,7 +195,7 @@ namespace EconomicGame.Services
                 : player.NetWorth;
             var outstandingDebt = player.Loans
                 .Where(l => !l.IsDefaulted || l.Amount > 0)
-                .Sum(l => l.Amount + l.Penalty);
+                .Sum(l => l.TotalOwed);
             var netWorth = baseNetWorth - outstandingDebt;
 
             switch (scenario.Goal.Type)

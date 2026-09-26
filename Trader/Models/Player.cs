@@ -230,7 +230,7 @@ namespace EconomicGame
         {
             get
             {
-                try { lock (Loans) return Loans.Sum(l => l.Amount + l.Penalty); }
+                try { lock (Loans) return Loans.Sum(l => l.TotalOwed); }
                 catch (InvalidOperationException) { return 0m; }
             }
         }
@@ -412,6 +412,15 @@ namespace EconomicGame
         public DateTime DueDate { get; set; }
         public decimal Penalty { get; set; }
         public bool IsDefaulted { get; set; }
+
+        /// <summary>Interest accrued so far (simple interest on principal, per game month).</summary>
+        public decimal AccruedInterest { get; set; }
+        /// <summary>Game time interest was last accrued up to. Null → starts on the next tick.</summary>
+        public DateTime? LastInterestAccrual { get; set; }
+
+        /// <summary>Everything owed right now: principal + interest + penalty.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public decimal TotalOwed => Amount + AccruedInterest + Penalty;
     }
 
     #endregion

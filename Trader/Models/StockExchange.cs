@@ -22,7 +22,10 @@ namespace EconomicGame
                 // --- Phase 5: Inflation Cooling ---
                 // If a price becomes "Hyper-inflated" (> $1000), it feels natural downward pressure
                 // This prevents the economy from becoming purely about astronomical numbers
-                if (item.CurrentPrice > GameConstants.PriceHyperThreshold)
+                // Threshold is relative to the item's normal price: a flat $500 cap used to drag
+                // Gold ($1500), Pharma, Electronics and Luxury down to ~$500 and below forever.
+                var hyperThreshold = Math.Max(GameConstants.PriceHyperThreshold, item.BasePrice * GameConstants.HyperThresholdBaseMultiplier);
+                if (item.CurrentPrice > hyperThreshold)
                 {
                     item.CurrentPrice *= GameConstants.InflationCoolingFactor;
                 }
@@ -30,7 +33,8 @@ namespace EconomicGame
                 // --- Phase 10: Foundation Cooling ---
                 // Raw materials (Wheat, Steel, etc.) should stay affordable. 
                 // If price > $200, apply additional cooling.
-                if (GameConstants.RawMaterials.Contains(item.Name) && item.CurrentPrice > 200m)
+                var rawCap = Math.Max(200m, item.BasePrice * GameConstants.RawCoolingBaseMultiplier);
+                if (GameConstants.RawMaterials.Contains(item.Name) && item.CurrentPrice > rawCap)
                 {
                     item.CurrentPrice *= GameConstants.InflationCoolingFactor;
                 }

@@ -160,7 +160,7 @@ namespace EconomicGame.Services
             if (ai.Money > repayThreshold && ai.Loans.Any())
             {
                 var loan = ai.Loans.First();
-                var totalDue = loan.Amount + loan.Penalty;
+                var totalDue = loan.TotalOwed;
                 if (ai.Money > totalDue + 2000)
                 {
                     ai.Money -= totalDue;

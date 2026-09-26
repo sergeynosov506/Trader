@@ -12,11 +12,11 @@ namespace EconomicGame
 
         public void UpdateInterestRate()
         {
-            // Fluctuate between 2% and 10%
-            var change = (decimal)(_random.NextDouble() * 0.02 - 0.01); // +/- 1%
-            CurrentInterestRate += change;
-            if (CurrentInterestRate < 0.02m) CurrentInterestRate = 0.02m;
-            if (CurrentInterestRate > 0.10m) CurrentInterestRate = 0.10m;
+            // Slow random walk of the base MONTHLY rate within [Min..Max]
+            var drift = GameConstants.InterestRateDriftPerTick;
+            var change = (decimal)(_random.NextDouble() * 2 - 1) * drift;
+            CurrentInterestRate = Math.Clamp(CurrentInterestRate + change,
+                GameConstants.MinBaseInterestRate, GameConstants.MaxBaseInterestRate);
         }
 
         /// <summary>
@@ -28,7 +28,7 @@ namespace EconomicGame
             // Reputation 0-100, max discount at 100
             var discountFactor = player.Reputation / 100m;
             var discount = discountFactor * GameConstants.MaxReputationDiscount;
-            return Math.Max(0.02m, CurrentInterestRate - discount);
+            return Math.Max(GameConstants.MinLoanInterestRate, CurrentInterestRate - discount);
         }
 
         /// <summary>
@@ -95,8 +95,8 @@ namespace EconomicGame
             var daysSinceLastPayment = (currentTime - player.LastInterestPaid.Value).Days;
             if (daysSinceLastPayment < GameConstants.DepositInterestPaymentDays) return 0;
 
-            // Weekly interest (annual rate / 52 weeks)
-            var weeklyRate = GetDepositInterestRate() / 52m;
+            // Weekly interest (monthly rate × 7/30)
+            var weeklyRate = GetDepositInterestRate() * 7m / 30m;
             var weeks = daysSinceLastPayment / 7;
             var interest = player.BankDeposit * weeklyRate * weeks;
 
@@ -168,16 +168,36 @@ namespace EconomicGame
                 InterestRate = GetInterestRateForPlayer(player), // Use reputation-based rate
                 DueDate = currentTime.AddDays(months * 30), // treating months as 30 days
                 Penalty = 0,
-                IsDefaulted = false
+                IsDefaulted = false,
+                LastInterestAccrual = currentTime
             };
             player.Loans.Add(loan);
             player.Money += amount;
+        }
+
+        /// <summary>
+        /// Accrues simple interest on the principal: InterestRate per 30 game days,
+        /// pro-rated by elapsed game time. Keeps running after default.
+        /// </summary>
+        private static void AccrueInterest(Loan loan, DateTime currentTime)
+        {
+            if (loan.LastInterestAccrual == null || loan.LastInterestAccrual > currentTime)
+            {
+                loan.LastInterestAccrual = currentTime;
+                return;
+            }
+            var days = (decimal)(currentTime - loan.LastInterestAccrual.Value).TotalDays;
+            if (days <= 0) return;
+            loan.AccruedInterest += Math.Round(loan.Amount * loan.InterestRate * days / 30m, 2);
+            loan.LastInterestAccrual = currentTime;
         }
 
         public void CheckLoans(Player player, DateTime currentTime)
         {
             foreach (var loan in player.Loans.ToList()) // ToList to allow modification/removal
             {
+                AccrueInterest(loan, currentTime);
+
                 if (currentTime > loan.DueDate)
                 {
                     if (!loan.IsDefaulted)
@@ -198,7 +218,7 @@ namespace EconomicGame
 
         private void SeizeAssets(Player player, Loan loan)
         {
-            var totalDebt = loan.Amount + loan.Penalty;
+            var totalDebt = loan.TotalOwed;
             
             // Step 1: Cash
             if (player.Money >= totalDebt)

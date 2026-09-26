@@ -174,7 +174,7 @@
                             {
                                 <div class="d-flex justify-content-between py-1 text-danger fw-bold">
                                     <span>💳 @Loc["bank.debt"]</span>
-                                    <span>-@Player.Loans.Sum(l => l.Amount + l.Penalty).ToString("C")</span>
+                                    <span>-@Player.TotalDebt.ToString("C")</span>
                                 </div>
                             }
                         </div>
