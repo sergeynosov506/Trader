@@ -176,11 +176,11 @@ namespace EconomicGame
                     lock (Properties) propVal = Properties.Sum(p => p.PurchasePrice * 0.7m);
                     lock (Factories) facVal = Factories.Sum(f => f.PurchasePrice * 0.5m);
 
-                    return Money + BankDeposit + invVal + whVal + vehVal + lndVal + propVal + facVal;
+                    return Money + BankDeposit + invVal + whVal + vehVal + lndVal + propVal + facVal - TotalDebt;
                 }
                 catch (InvalidOperationException)
                 {
-                    return Money + BankDeposit;
+                    return Money + BankDeposit - TotalDebt;
                 }
             }
         }
@@ -213,11 +213,25 @@ namespace EconomicGame
                 lock (Properties) propVal = Properties.Sum(p => p.PurchasePrice * 0.7m);
                 lock (Factories) facVal = Factories.Sum(f => f.PurchasePrice * 0.5m);
 
-                return Money + BankDeposit + inventoryValue + whVal + vehVal + lndVal + propVal + facVal;
+                return Money + BankDeposit + inventoryValue + whVal + vehVal + lndVal + propVal + facVal - TotalDebt;
             }
             catch (InvalidOperationException)
             {
-                return Money + BankDeposit;
+                return Money + BankDeposit - TotalDebt;
+            }
+        }
+
+        /// <summary>
+        /// Outstanding bank debt (principal + penalties). Net worth is reported NET of debt —
+        /// otherwise taking a loan would inflate net worth, leaderboards and scenario goals.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public decimal TotalDebt
+        {
+            get
+            {
+                try { lock (Loans) return Loans.Sum(l => l.Amount + l.Penalty); }
+                catch (InvalidOperationException) { return 0m; }
             }
         }
 

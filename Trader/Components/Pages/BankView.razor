@@ -99,11 +99,18 @@
                     <div class="card-body">
                         <div class="mb-3">
                             <label class="form-label">@Loc["bank.amount"]</label>
-                            <input type="number" @bind="_loanAmount" class="form-control" min="100" max="50000" step="100" disabled="@IsBankClosed" />
+                            <input type="number" @bind="_loanAmount" class="form-control" min="100" max="@AvailableCredit" step="100" disabled="@IsBankClosed" />
+                            @if (Player != null)
+                            {
+                                <div class="form-text">
+                                    @string.Format(Loc["bank.credit_available"], AvailableCredit.ToString("C"))
+                                    <span class="text-muted">· @string.Format(Loc["bank.credit_limit"], CreditLimit.ToString("C"), Player.TotalDebt.ToString("C"))</span>
+                                </div>
+                            }
                         </div>
                         <div class="mb-3">
                             <label class="form-label">@Loc["bank.term_months"]</label>
-                            <input type="number" @bind="_loanMonths" class="form-control" min="1" max="60" disabled="@IsBankClosed" />
+                            <input type="number" @bind="_loanMonths" class="form-control" min="1" max="@EconomicGame.Configuration.GameConstants.LoanMaxMonths" disabled="@IsBankClosed" />
                         </div>
 
                         <!-- Rate breakdown -->
@@ -127,7 +134,7 @@
                             </div>
                         </div>
 
-                        <button class="btn btn-primary w-100" @onclick="TakeLoan" disabled="@IsBankClosed">@Loc["bank.take_loan"]</button>
+                        <button class="btn btn-primary w-100" @onclick="TakeLoan" disabled="@(IsBankClosed || AvailableCredit < 100)">@Loc["bank.take_loan"]</button>
                     </div>
                 </div>
             </div>
@@ -291,6 +298,9 @@
 
     private bool IsBankClosed => GameEngine.CurrentTime.Hour < 9 || GameEngine.CurrentTime.Hour >= 17;
 
+    private decimal CreditLimit => Player == null ? 0m : GameEngine.Bank.GetCreditLimit(Player, GameEngine.ExchangeItems);
+    private decimal AvailableCredit => Player == null ? 0m : GameEngine.Bank.GetAvailableCredit(Player, GameEngine.ExchangeItems);
+
     private decimal _loanAmount = 1000m;
     private int _loanMonths = 12;
     private decimal _depositAmount = 1000m;
@@ -325,7 +335,20 @@
         }
 
         var bank = GameEngine.Bank;
-        bank.TakeLoan(Player, _loanAmount, _loanMonths, GameEngine.CurrentTime);
+        if (_loanAmount > AvailableCredit)
+        {
+            _message = AvailableCredit < 100
+                ? Loc["bank.credit_none"]
+                : string.Format(Loc["bank.loan_over_limit"], AvailableCredit.ToString("C"));
+            return;
+        }
+
+        var error = bank.TryTakeLoan(Player, _loanAmount, _loanMonths, GameEngine.CurrentTime, GameEngine.ExchangeItems);
+        if (error != null)
+        {
+            _message = error;
+            return;
+        }
         Player.MonthlyIncome += _loanAmount;
         _message = string.Format(Loc["bank.loan_approved"], _loanAmount.ToString("C"), _loanMonths, bank.CurrentInterestRate.ToString("P1"));
         StateHasChanged();

@@ -151,7 +151,8 @@ namespace EconomicGame.Services
             
             if (ai.Money < emergencyThreshold && !ai.Loans.Any())
             {
-                _gameEngine.Bank.TakeLoan(ai, 5000, 12, _gameEngine.CurrentTime);
+                // Same credit limit as the human player; silently skip if the bank says no
+                _gameEngine.Bank.TryTakeLoan(ai, 5000, 12, _gameEngine.CurrentTime, _gameEngine.ExchangeItems);
             }
 
             // Repay loans if rich - conservative agents repay earlier

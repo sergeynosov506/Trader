@@ -108,6 +108,58 @@ namespace EconomicGame
             return interest;
         }
 
+        /// <summary>Reputation-based loan-to-value ratio: 25% at rep 0 → 75% at rep 100.</summary>
+        public decimal GetLoanToValue(Player player)
+        {
+            var rep = Math.Clamp(player.Reputation, 0, 100) / 100m;
+            return GameConstants.LoanMinLtv + (GameConstants.LoanMaxLtv - GameConstants.LoanMinLtv) * rep;
+        }
+
+        /// <summary>
+        /// Maximum TOTAL debt the bank will let this player carry:
+        /// max(base limit, equity × LTV). Equity is market net worth already net of debt.
+        /// </summary>
+        public decimal GetCreditLimit(Player player, IEnumerable<MarketItem> marketItems)
+        {
+            var equity = Math.Max(0m, player.ComputeMarketNetWorth(marketItems));
+            var limit = Math.Max(GameConstants.LoanBaseCreditLimit, equity * GetLoanToValue(player));
+            return Math.Floor(limit / 100m) * 100m; // round down to $100
+        }
+
+        /// <summary>How much more can be borrowed right now (0 if in default or bankrupt).</summary>
+        public decimal GetAvailableCredit(Player player, IEnumerable<MarketItem> marketItems)
+        {
+            if (player.IsBankrupt || player.Loans.Any(l => l.IsDefaulted)) return 0m;
+            return Math.Max(0m, GetCreditLimit(player, marketItems) - player.TotalDebt);
+        }
+
+        /// <summary>
+        /// Validated loan: checks amount, term and the credit limit. Returns null on success,
+        /// otherwise a (Russian) error message. Use this for every player/bot-initiated loan.
+        /// </summary>
+        public string? TryTakeLoan(Player player, decimal amount, int months, DateTime currentTime, IEnumerable<MarketItem> marketItems)
+        {
+            if (amount < 100m)
+                return "❌ Минимальная сумма кредита: $100";
+            if (months < 1 || months > GameConstants.LoanMaxMonths)
+                return $"❌ Срок кредита: от 1 до {GameConstants.LoanMaxMonths} мес.";
+            if (player.IsBankrupt)
+                return "❌ Банк не кредитует банкротов.";
+            if (player.Loans.Any(l => l.IsDefaulted))
+                return "❌ У тебя просроченный кредит — сначала погаси его.";
+
+            var available = GetAvailableCredit(player, marketItems);
+            if (amount > available)
+                return $"❌ Превышен кредитный лимит. Доступно: {available:C} (лимит {GetCreditLimit(player, marketItems):C}, долг {player.TotalDebt:C})";
+
+            TakeLoan(player, amount, months, currentTime);
+            return null;
+        }
+
+        /// <summary>
+        /// Unchecked loan issue — only for scripted cases (scenario starting loans).
+        /// Player/bot requests go through <see cref="TryTakeLoan"/>.
+        /// </summary>
         public void TakeLoan(Player player, decimal amount, int months, DateTime currentTime)
         {
             var loan = new Loan

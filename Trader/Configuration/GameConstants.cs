@@ -9,6 +9,14 @@ namespace EconomicGame.Configuration
         public const decimal DefaultInterestRate = 0.05m; // 5% annual
         public const decimal DailyPenaltyRate = 0.01m; // 1% per day
         public const decimal MaxPenaltyThreshold = 0.5m; // 50% of loan amount
+
+        // Credit limit: total debt ≤ max(LoanBaseCreditLimit, equity × LTV),
+        // LTV grows with reputation from LoanMinLtv (rep 0) to LoanMaxLtv (rep 100); rep 50 → 50%.
+        // Equity = market net worth net of existing debt, so borrowed cash can't be re-pledged.
+        public const decimal LoanBaseCreditLimit = 5000m;
+        public const decimal LoanMinLtv = 0.25m;
+        public const decimal LoanMaxLtv = 0.75m;
+        public const int LoanMaxMonths = 60;
         
         // News Settings
         public const double NewsGenerationChance = 0.1; // 10% chance
